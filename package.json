@@ -1,7 +1,7 @@
 {
-  "name": "signalid-hover-info",
-  "displayName": "OBDb",
-  "description": "Shows model year support information when hovering over signal IDs",
+  "name": "obdb-tooling",
+  "displayName": "OBDb tooling",
+  "description": "OBDb signal editing tooling.",
   "version": "0.1.0",
   "engines": {
     "vscode": "^1.60.0"

@@ -1,6 +1,6 @@
 # OBDb tooling
 
-A Visual Studio Code extension for OBDb signal editing workflows.
+A Visual Studio Code extension for OBDb signal editing tooling.
 
 ## Features
 
