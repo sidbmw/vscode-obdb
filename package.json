@@ -4,7 +4,8 @@
   "description": "OBDb signal editing tooling.",
   "version": "0.1.0",
   "engines": {
-    "vscode": "^1.60.0"
+    "vscode": "^1.60.0",
+    "node": ">=18.0.0"
   },
   "categories": [
     "Other"
@@ -33,8 +34,11 @@
     ]
   },
   "devDependencies": {
-    "@types/node": "^16.x",
+    "@types/node": "^18.x",
     "@types/vscode": "^1.60.0",
     "typescript": "^4.6.3"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
   }
 }
