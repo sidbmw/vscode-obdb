@@ -1,6 +1,6 @@
 {
   "name": "signalid-hover-info",
-  "displayName": "Signal ID Hover Info",
+  "displayName": "OBDb",
   "description": "Shows model year support information when hovering over signal IDs",
   "version": "0.1.0",
   "engines": {
