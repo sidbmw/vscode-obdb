@@ -2,6 +2,7 @@
   "name": "obdb-tooling",
   "displayName": "OBDb tooling",
   "description": "OBDb signal editing tooling.",
+  "publisher": "clutchengineering",
   "version": "0.1.0",
   "engines": {
     "vscode": "^1.60.0",
