@@ -57,6 +57,9 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+      - name: Publish to VS Code Marketplace
+        run: npx @vscode/vsce publish --pat ${{ secrets.VSCE_PAT }} --packagePath *.vsix
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
@@ -68,19 +71,36 @@ jobs:
 
             ### Installation Instructions
 
-            #### Option 1: Install from VSIX
+            #### Option 1: Install from VS Code Marketplace
+            1. Open VS Code
+            2. Go to Extensions view (Ctrl+Shift+X)
+            3. Search for "clutchengineering.obdb-tooling"
+            4. Click Install
+
+            #### Option 2: Install from VSIX
             1. Download the .vsix file from this release
             2. In VS Code, go to Extensions view (Ctrl+Shift+X)
             3. Click "..." at the top of the Extensions view
             4. Select "Install from VSIX..." and choose the downloaded file
 
-            #### Option 2: In devcontainers
+            #### Option 3: In devcontainers
             Add to your devcontainer.json:
             ```json
             "customizations": {
               "vscode": {
                 "extensions": [
-                  "https://github.com/OBDb/vscode-obdb/releases/download/v${{ steps.get_version.outputs.VERSION }}/signalid-hover-info-${{ steps.get_version.outputs.VERSION }}.vsix"
+                  "clutchengineering.obdb-tooling"
+                ]
+              }
+            }
+            ```
+
+            Alternatively, to use a specific version from GitHub:
+            ```json
+            "customizations": {
+              "vscode": {
+                "extensions": [
+                  "https://github.com/OBDb/vscode-obdb/releases/download/v${{ steps.get_version.outputs.VERSION }}/obdb-tooling-${{ steps.get_version.outputs.VERSION }}.vsix"
                 ]
               }
             }
