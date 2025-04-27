@@ -1,0 +1,25 @@
+{
+	"name": "Node.js",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"features": {
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "none"
+		}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"dbaeumer.vscode-eslint",
+				"ms-vscode.vscode-typescript-next"
+			],
+			"settings": {
+				"editor.formatOnSave": true
+			}
+		}
+	},
+	"forwardPorts": [],
+	"postCreateCommand": "npm install",
+	"remoteUser": "node"
+}
