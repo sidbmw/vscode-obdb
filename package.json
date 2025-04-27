@@ -3,7 +3,7 @@
   "displayName": "OBDb tooling",
   "description": "OBDb signal editing tooling.",
   "publisher": "clutchengineering",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "engines": {
     "vscode": "^1.60.0",
     "node": ">=18.0.0"
