@@ -23,8 +23,24 @@
   },
   "contributes": {
     "capabilities": {
-      "hoverProvider": "true"
+      "hoverProvider": "true",
+      "decorationProvider": "true"
     },
+    "commands": [
+      {
+        "command": "obdb.showBitmapVisualization",
+        "title": "Show Bitmap Visualization",
+        "category": "OBDb"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "obdb.showBitmapVisualization",
+        "key": "ctrl+shift+v",
+        "mac": "cmd+shift+v",
+        "when": "editorLangId == json"
+      }
+    ],
     "languages": [
       {
         "id": "json",
