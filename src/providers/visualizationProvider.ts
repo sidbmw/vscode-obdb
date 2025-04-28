@@ -8,7 +8,7 @@ let visualizationPanel: vscode.WebviewPanel | undefined;
 let currentCommand: any | undefined;
 
 /**
- * Initialize the bitmap visualization provider
+ * Initialize the OBDb workbench provider
  * Shows bitmap visualizations when editing commands
  */
 export function createVisualizationProvider(): vscode.Disposable {
@@ -27,6 +27,21 @@ export function createVisualizationProvider(): vscode.Disposable {
     vscode.window.onDidChangeTextEditorSelection(event => {
       if (event.textEditor.document.languageId === 'json') {
         updateVisualizationFromCursor(event.textEditor);
+      }
+    })
+  );
+
+  // Listen for document closing
+  disposables.push(
+    vscode.workspace.onDidCloseTextDocument(document => {
+      // Check if the closed document was being visualized
+      if (visualizationPanel &&
+          vscode.window.activeTextEditor?.document !== document &&
+          document.languageId === 'json') {
+        // Close the visualization panel when the document is closed
+        visualizationPanel.dispose();
+        visualizationPanel = undefined;
+        currentCommand = undefined;
       }
     })
   );
@@ -84,7 +99,7 @@ function createOrShowVisualizationPanel() {
   // Otherwise, create a new panel
   visualizationPanel = vscode.window.createWebviewPanel(
     'bitmapVisualization',
-    'Bitmap Visualization',
+    'OBDb workbench',
     {
       viewColumn: vscode.ViewColumn.Beside,
       preserveFocus: true
@@ -308,7 +323,7 @@ function generateBitmapHtml(command: any): string {
     return html;
   } catch (error) {
     console.error('Error generating bitmap HTML:', error);
-    return '<div class="error">Error generating bitmap visualization</div>';
+    return '<div class="error">Error generating OBDb workbench</div>';
   }
 }
 
@@ -320,7 +335,7 @@ async function updateVisualizationPanel(command: any) {
     createOrShowVisualizationPanel();
   }
 
-  // Generate HTML bitmap visualization instead of using image
+  // Generate HTML OBDb workbench instead of using image
   const bitmapHtml = generateBitmapHtml(command);
 
   // Get command details for display
@@ -358,7 +373,7 @@ function getWebviewContent(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bitmap Visualization</title>
+  <title>OBDb workbench</title>
   <style>
     body {
       padding: 16px;
@@ -408,7 +423,7 @@ function getWebviewContent(
       margin: 16px 0;
     }
 
-    /* Bitmap visualization styles */
+    /* OBDb workbench styles */
     .bitmap-container {
       display: flex;
       flex-direction: column;
