@@ -3,6 +3,20 @@ import { escapeHtml, formatBitRange } from './utils';
 import { createBitToSignalMap, generateSignalColors, getUniqueSignals } from './signalExtractor';
 
 /**
+ * Converts a number to alphabetic representation (A, B, C, ..., Z, AA, AB, ...)
+ */
+function toAlphabetic(num: number): string {
+  let result = '';
+  while (num >= 0) {
+    const remainder = num % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    num = Math.floor(num / 26) - 1;
+    if (num < 0) break;
+  }
+  return result;
+}
+
+/**
  * Generate HTML for bitmap visualization table
  */
 export function generateBitmapHtml(command: any, signals: Signal[]): string {
@@ -31,6 +45,17 @@ export function generateBitmapHtml(command: any, signals: Signal[]): string {
     // Build HTML for bit grid
     let html = '<div class="bitmap-container">';
 
+    // Add toggle switch for byte index format
+    html += `<div class="index-format-toggle">
+      <div class="toggle-label">Byte index format:</div>
+      <div class="toggle-switch">
+        <input type="radio" id="numeric-format" name="index-format" value="numeric" checked>
+        <label for="numeric-format">Numeric</label>
+        <input type="radio" id="alphabetic-format" name="index-format" value="alphabetic">
+        <label for="alphabetic-format">Alphabetic</label>
+      </div>
+    </div>`;
+
     // Add bit grid table
     html += '<div class="bit-grid">';
     html += '<table>';
@@ -45,19 +70,24 @@ export function generateBitmapHtml(command: any, signals: Signal[]): string {
     // Table body with byte rows
     html += '<tbody>';
     for (let byteIndex = 0; byteIndex < bytesNeeded; byteIndex++) {
-      html += `<tr><th>${byteIndex}</th>`;
+      // Add data attribute to store both formats for the index
+      const alphabeticIndex = toAlphabetic(byteIndex);
+      html += `<tr><th class="byte-index" data-numeric="${byteIndex}" data-alphabetic="${alphabeticIndex}">${byteIndex}</th>`;
 
       for (let bitIndex = 0; bitIndex < 8; bitIndex++) {
         const absoluteBitIndex = (byteIndex * 8) + bitIndex;
         const signal = bitToSignalMap[absoluteBitIndex];
 
+        // Use proper alphabetic representation for absoluteBitIndex
+        const alphabeticBitIndex = toAlphabetic(absoluteBitIndex);
+
         if (signal) {
           // Bit is mapped to a signal
           const color = signalColors[signal.id];
-          html += `<td class="bit-cell signal-bit" data-signal-id="${signal.id}" style="background-color: ${color};">${absoluteBitIndex}</td>`;
+          html += `<td class="bit-cell signal-bit" data-signal-id="${signal.id}" data-numeric="${absoluteBitIndex}" data-alphabetic="${alphabeticBitIndex}" style="background-color: ${color};">${absoluteBitIndex}</td>`;
         } else {
           // Unused bit
-          html += `<td class="bit-cell">${absoluteBitIndex}</td>`;
+          html += `<td class="bit-cell" data-numeric="${absoluteBitIndex}" data-alphabetic="${alphabeticBitIndex}">${absoluteBitIndex}</td>`;
         }
       }
 
