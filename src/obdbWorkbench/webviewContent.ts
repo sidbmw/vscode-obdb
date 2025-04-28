@@ -209,6 +209,7 @@ export function getWebviewContent(
     'border-radius: 3px;' +
     'font-size: 0.9em;' +
     'overflow-wrap: break-word;' +
+    'white-space: pre;' +
     '}' +
     '.expected-values {' +
     'margin-top: 8px;' +
