@@ -87,9 +87,16 @@ export function generateBitMappingVisualization(command: Command): string {
       signalColors[id] = `hsl(${Math.floor(hue)}, 70%, 60%)`;
     });
 
+    // Get unique signals
+    const uniqueSignals = Array.from(
+      new Map(Object.values(bitToSignalMap)
+        .map((signal: any) => [signal.id, signal])
+      ).values()
+    );
+
     // Create a canvas
     const width = 400;
-    const height = 200 + (bytesNeeded * 30);
+    const height = 16 + (bytesNeeded * 30) + (uniqueSignals.length * 20);
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
 
@@ -97,26 +104,8 @@ export function generateBitMappingVisualization(command: Command): string {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
-    // Draw title
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 14px Arial';
-    ctx.fillText('Bit Mapping Visualization', 10, 20);
-
-    // Add command info if available
-    ctx.font = '12px Arial';
-    if (command.cmd) {
-      const cmdDisplay = typeof command.cmd === 'object' ?
-        Object.entries(command.cmd).map(([k, v]) => `${k}: ${v}`).join(', ') :
-        command.cmd.toString();
-      ctx.fillText('Command: ' + cmdDisplay, 10, 40);
-    }
-
-    if (command.hdr) {
-      ctx.fillText('Header: ' + command.hdr, 10, 60);
-    }
-
     // Draw bit grid
-    const gridStartY = 80;
+    const gridStartY = 8;
     const cellSize = 28;
     const headerSize = 20;
 
@@ -171,22 +160,12 @@ export function generateBitMappingVisualization(command: Command): string {
         // Add bit index
         ctx.fillStyle = '#000000';
         ctx.font = '10px Arial';
-        ctx.fillText(absoluteBitIndex.toString(), x + cellSize/2 - 4, y + cellSize/2 + 4);
+        ctx.fillText(absoluteBitIndex.toString(), x + cellSize / 2 - 4, y + cellSize / 2 + 4);
       }
     }
 
     // Draw signal legend
-    const legendStartY = gridStartY + (bytesNeeded * cellSize) + 20;
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 12px Arial';
-    ctx.fillText('Signal Legend', 10, legendStartY);
-
-    // Get unique signals
-    const uniqueSignals = Array.from(
-      new Map(Object.values(bitToSignalMap)
-        .map((signal: any) => [signal.id, signal])
-      ).values()
-    );
+    const legendStartY = gridStartY + (bytesNeeded * cellSize);
 
     if (uniqueSignals.length > 0) {
       uniqueSignals.forEach((signal: any, index) => {
@@ -204,7 +183,7 @@ export function generateBitMappingVisualization(command: Command): string {
         ctx.fillText(
           `${signal.name} (Bits: ${formatBitRange(signal)})`,
           35,
-          y
+          y + 2
         );
 
         // Add suggested metric if available
