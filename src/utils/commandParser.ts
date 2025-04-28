@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as yaml from 'js-yaml';
 import { Command, CommandPositionResult, Signal } from '../types';
 
 /**
@@ -127,4 +130,65 @@ function normalizeSignals(signals: any[]): Signal[] {
       bitLength
     };
   });
+}
+
+/**
+ * Fetches sample responses for a command from test case files
+ * @param commandId The command ID to search for (e.g. '7E0.22295A')
+ * @returns Array of objects containing model year and sample response data
+ */
+export async function getSampleCommandResponses(commandId: string): Promise<Array<{modelYear: string, response: string, expectedValues?: Record<string, any>}>> {
+  if (!commandId) return [];
+
+  try {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) return [];
+
+    const rootPath = workspaceFolders[0].uri.fsPath;
+    const testCasesPath = path.join(rootPath, 'tests', 'test_cases');
+
+    // Check if the test_cases directory exists
+    if (!fs.existsSync(testCasesPath)) return [];
+
+    const samples: Array<{modelYear: string, response: string, expectedValues?: Record<string, any>}> = [];
+    const modelYearDirs = fs.readdirSync(testCasesPath)
+      .filter(dir => /^\d{4}$/.test(dir))  // Only include directories that are 4 digit years
+      .sort();  // Sort by year
+
+    // Find command files for this commandId across model years
+    for (const yearDir of modelYearDirs) {
+      const yearPath = path.join(testCasesPath, yearDir);
+      const commandsDir = path.join(yearPath, 'commands');
+
+      if (fs.existsSync(commandsDir)) {
+        // Look for a command file with the matching ID
+        const [canHeader, cmd] = commandId.split('.');
+        const commandFile = path.join(commandsDir, `${commandId}.yaml`);
+
+        if (fs.existsSync(commandFile)) {
+          try {
+            const content = fs.readFileSync(commandFile, 'utf8');
+            const data = yaml.load(content) as any;
+
+            if (data && Array.isArray(data.test_cases) && data.test_cases.length > 0) {
+              // Only take the first response from each model year
+              const firstCase = data.test_cases[0];
+              samples.push({
+                modelYear: yearDir,
+                response: firstCase.response,
+                expectedValues: firstCase.expected_values
+              });
+            }
+          } catch (err) {
+            console.error(`Error reading command file ${commandFile}:`, err);
+          }
+        }
+      }
+    }
+
+    return samples;
+  } catch (error) {
+    console.error('Error fetching sample command responses:', error);
+    return [];
+  }
 }

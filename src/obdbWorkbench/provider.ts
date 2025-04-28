@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isPositionInCommand } from '../utils/commandParser';
+import { isPositionInCommand, getSampleCommandResponses } from '../utils/commandParser';
 import { extractSignals } from './signalExtractor';
 import { generateBitmapHtml } from './htmlGenerator';
 import { getWebviewContent } from './webviewContent';
@@ -191,6 +191,13 @@ export async function updateVisualizationPanel(command: any) {
     ? Object.entries(command.cmd).map(([k, v]) => `${k}: ${v}`).join(', ')
     : command.cmd?.toString() || '';
 
+  // Create a full command ID format that matches our test cases file structure
+  // Typically this would be in format like "7E0.22295A"
+  const fullCommandId = commandId || (commandHeader && commandDisplay ? `${commandHeader}.${commandDisplay.replace(/:\s+/g, '')}` : '');
+
+  // Fetch sample responses if we have a command ID
+  const sampleResponses = fullCommandId ? await getSampleCommandResponses(fullCommandId) : [];
+
   // Update the webview content
   visualizationPanel!.webview.html = getWebviewContent(
     bitmapHtml,
@@ -198,6 +205,7 @@ export async function updateVisualizationPanel(command: any) {
     commandId,
     commandHeader,
     commandDisplay,
-    command.description || ''
+    command.description || '',
+    sampleResponses
   );
 }

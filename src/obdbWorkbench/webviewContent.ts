@@ -9,7 +9,8 @@ export function getWebviewContent(
   commandId: string,
   commandHeader: string,
   commandDisplay: string,
-  description: string
+  description: string,
+  sampleResponses?: Array<{modelYear: string, response: string, expectedValues?: Record<string, any>}>
 ): string {
   return '<!DOCTYPE html>' +
     '<html lang="en">' +
@@ -184,6 +185,48 @@ export function getWebviewContent(
     'font-size: 0.8em;' +
     'margin-left: auto;' +
     '}' +
+    '.samples-container {' +
+    'margin-top: 30px;' +
+    'border-top: 1px solid var(--vscode-panel-border);' +
+    'padding-top: 16px;' +
+    '}' +
+    '.sample-response {' +
+    'margin-bottom: 12px;' +
+    'background-color: var(--vscode-editor-background);' +
+    'border: 1px solid var(--vscode-panel-border);' +
+    'border-radius: 4px;' +
+    'padding: 10px;' +
+    '}' +
+    '.sample-heading {' +
+    'font-weight: 500;' +
+    'margin-bottom: 6px;' +
+    'color: var(--vscode-editor-foreground);' +
+    '}' +
+    '.sample-response-data {' +
+    'font-family: var(--vscode-editor-font-family), monospace;' +
+    'background-color: var(--vscode-textCodeBlock-background);' +
+    'padding: 6px;' +
+    'border-radius: 3px;' +
+    'font-size: 0.9em;' +
+    'overflow-wrap: break-word;' +
+    '}' +
+    '.expected-values {' +
+    'margin-top: 8px;' +
+    'font-size: 0.9em;' +
+    'color: var(--vscode-descriptionForeground);' +
+    '}' +
+    '.expected-value {' +
+    'display: inline-block;' +
+    'margin-right: 10px;' +
+    'margin-bottom: 5px;' +
+    'padding: 2px 6px;' +
+    'background-color: var(--vscode-editorInlayHint-background);' +
+    'border-radius: 3px;' +
+    '}' +
+    '.no-samples {' +
+    'color: var(--vscode-descriptionForeground);' +
+    'font-style: italic;' +
+    '}' +
     '@media (min-width: 768px) {' +
     '.bitmap-container {' +
     'flex-direction: row;' +
@@ -218,6 +261,26 @@ export function getWebviewContent(
     '</div>' +
     (description ? '<div class="description">' + escapeHtml(description) + '</div>' : '') +
     bitmapHtml +
+    // Add sample responses section if available
+    (sampleResponses && sampleResponses.length > 0 ?
+      '<div class="samples-container">' +
+      '<h3>Sample Responses by Model Year</h3>' +
+      sampleResponses.map(sample =>
+        '<div class="sample-response">' +
+        '<div class="sample-heading">Model Year ' + escapeHtml(sample.modelYear) + '</div>' +
+        '<div class="sample-response-data">' + escapeHtml(sample.response) + '</div>' +
+        (sample.expectedValues ?
+          '<div class="expected-values">' +
+          '<div>Expected Values:</div>' +
+          Object.entries(sample.expectedValues).map(([key, value]) =>
+            '<span class="expected-value">' + escapeHtml(key) + ': ' + escapeHtml(String(value)) + '</span>'
+          ).join('') +
+          '</div>'
+        : '') +
+        '</div>'
+      ).join('') +
+      '</div>'
+    : '') +
     '<script>' +
     'document.addEventListener("DOMContentLoaded", () => {' +
     'const signalBitCells = document.querySelectorAll(".signal-bit");' +
