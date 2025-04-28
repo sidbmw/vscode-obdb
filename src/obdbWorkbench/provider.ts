@@ -7,6 +7,8 @@ import { getWebviewContent } from './webviewContent';
 // Track webview panel and state
 let visualizationPanel: vscode.WebviewPanel | undefined;
 let currentCommand: any | undefined;
+// Track which document created the visualization
+let sourceDocument: vscode.TextDocument | undefined;
 
 /**
  * Initialize the OBDb workbench provider
@@ -19,7 +21,10 @@ export function createVisualizationProvider(): vscode.Disposable {
   // Listen for text document changes
   disposables.push(
     vscode.workspace.onDidChangeTextDocument(event => {
-      updateVisualization(event.document);
+      // If this is our source document, update the visualization
+      if (sourceDocument && event.document.uri.toString() === sourceDocument.uri.toString()) {
+        updateVisualization(event.document);
+      }
     })
   );
 
@@ -27,6 +32,8 @@ export function createVisualizationProvider(): vscode.Disposable {
   disposables.push(
     vscode.window.onDidChangeTextEditorSelection(event => {
       if (event.textEditor.document.languageId === 'json') {
+        // Update or set the source document when making a selection in a JSON file
+        sourceDocument = event.textEditor.document;
         updateVisualizationFromCursor(event.textEditor);
       }
     })
@@ -37,12 +44,13 @@ export function createVisualizationProvider(): vscode.Disposable {
     vscode.workspace.onDidCloseTextDocument(document => {
       // Check if the closed document was being visualized
       if (visualizationPanel &&
-          vscode.window.activeTextEditor?.document !== document &&
-          document.languageId === 'json') {
-        // Close the visualization panel when the document is closed
+          sourceDocument &&
+          document.uri.toString() === sourceDocument.uri.toString()) {
+        // Close the visualization panel when the source document is closed
         visualizationPanel.dispose();
         visualizationPanel = undefined;
         currentCommand = undefined;
+        sourceDocument = undefined;
       }
     })
   );
@@ -51,13 +59,28 @@ export function createVisualizationProvider(): vscode.Disposable {
   disposables.push(
     vscode.window.onDidChangeActiveTextEditor(editor => {
       if (editor && editor.document.languageId === 'json') {
-        // Use cursor position when switching editors
-        updateVisualizationFromCursor(editor);
-      } else if (editor) {
+        if (!sourceDocument || editor.document.uri.toString() === sourceDocument.uri.toString()) {
+          // This is either our source document or we're setting a new source
+          sourceDocument = editor.document;
+          // Use cursor position when switching editors
+          updateVisualizationFromCursor(editor);
+        } else {
+          // This is a different JSON file than our source document
+          // Hide the panel
+          if (visualizationPanel) {
+            visualizationPanel.dispose();
+            visualizationPanel = undefined;
+            currentCommand = undefined;
+          }
+          // Set this as the new source document
+          sourceDocument = editor.document;
+        }
+      } else if (editor && sourceDocument) {
         // Hide panel when switching to non-JSON files
         if (visualizationPanel) {
-          // Don't dispose the panel, just hide it by moving it to a background column
-          visualizationPanel.reveal(vscode.ViewColumn.Beside, false); // Don't focus it
+          visualizationPanel.dispose();
+          visualizationPanel = undefined;
+          currentCommand = undefined;
         }
       }
     })
@@ -66,6 +89,11 @@ export function createVisualizationProvider(): vscode.Disposable {
   // Create our webview panel if needed
   disposables.push(
     vscode.commands.registerCommand('obdb.showBitmapVisualization', () => {
+      if (vscode.window.activeTextEditor && vscode.window.activeTextEditor.document.languageId === 'json') {
+        // Set the source document when explicitly opening visualization
+        sourceDocument = vscode.window.activeTextEditor.document;
+      }
+
       createOrShowVisualizationPanel();
 
       // If we have a current command, update the visualization
@@ -83,6 +111,7 @@ export function createVisualizationProvider(): vscode.Disposable {
         visualizationPanel.dispose();
         visualizationPanel = undefined;
       }
+      sourceDocument = undefined;
     }
   };
 }
