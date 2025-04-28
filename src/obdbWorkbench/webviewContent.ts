@@ -201,6 +201,24 @@ export function getWebviewContent(
     'font-weight: 500;' +
     'margin-bottom: 6px;' +
     'color: var(--vscode-editor-foreground);' +
+    'display: flex;' +
+    'justify-content: space-between;' +
+    'align-items: center;' +
+    '}' +
+    '.copy-button {' +
+    'background-color: var(--vscode-button-secondaryBackground);' +
+    'color: var(--vscode-button-secondaryForeground);' +
+    'border: none;' +
+    'border-radius: 3px;' +
+    'padding: 3px 8px;' +
+    'font-size: 0.8em;' +
+    'cursor: pointer;' +
+    'display: flex;' +
+    'align-items: center;' +
+    'gap: 4px;' +
+    '}' +
+    '.copy-button:hover {' +
+    'background-color: var(--vscode-button-secondaryHoverBackground);' +
     '}' +
     '.sample-response-data {' +
     'font-family: var(--vscode-editor-font-family), monospace;' +
@@ -268,7 +286,14 @@ export function getWebviewContent(
       '<h3>Sample Responses by Model Year</h3>' +
       sampleResponses.map(sample =>
         '<div class="sample-response">' +
-        '<div class="sample-heading">Model Year ' + escapeHtml(sample.modelYear) + '</div>' +
+        '<div class="sample-heading">' +
+        '<span>Model Year ' + escapeHtml(sample.modelYear) + '</span>' +
+        '<button class="copy-button" onclick="copyToClipboard(this, `' + escapeHtml(sample.response.replace(/`/g, '\\`')) + '`)">'+
+        '<svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor">'+
+        '<path d="M4 4h8v1H4V4zm0 3h8v1H4V7zm0 3h6v1H4v-1z"/>'+
+        '<path fill-rule="evenodd" clip-rule="evenodd" d="M3 1L2 2v12l1 1h10l1-1V2l-1-1H3zm0 1h10v12H3V2z"/>'+
+        '</svg> Copy</button>' +
+        '</div>' +
         '<div class="sample-response-data">' + escapeHtml(sample.response) + '</div>' +
         (sample.expectedValues ?
           '<div class="expected-values">' +
@@ -342,6 +367,23 @@ export function getWebviewContent(
     '});' +
     '}' +
     '});' +
+    '</script>' +
+    '<script>' +
+    'function copyToClipboard(button, text) {' +
+    '  navigator.clipboard.writeText(text).then(() => {' +
+    '    const originalText = button.innerHTML;' +
+    '    button.innerHTML = "<svg width=\'14\' height=\'14\' viewBox=\'0 0 16 16\' xmlns=\'http://www.w3.org/2000/svg\' fill=\'currentColor\'><path fill-rule=\'evenodd\' clip-rule=\'evenodd\' d=\'M14.431 3.323l-8.47 8.47L3 9.348l-1.354 1.353 4.315 4.313.707-.707 9.117-9.117-1.354-1.867zM3.707 7.996l1.35 1.354 8.475-8.475-1.354-1.35-8.475 8.475z\'/></svg> Copied!";' +
+    '    button.style.backgroundColor = "var(--vscode-button-background)";' +
+    '    button.style.color = "var(--vscode-button-foreground)";' +
+    '    setTimeout(() => {' +
+    '      button.innerHTML = originalText;' +
+    '      button.style.backgroundColor = "";' +
+    '      button.style.color = "";' +
+    '    }, 2000);' +
+    '  }).catch(err => {' +
+    '    console.error("Failed to copy text: ", err);' +
+    '  });' +
+    '}' +
     '</script>' +
     '</body>' +
     '</html>';
