@@ -4,7 +4,9 @@
     {
       "type": "npm",
       "script": "watch",
-      "problemMatcher": "$tsc-watch",
+      "problemMatcher": [
+        "$tsc-watch"
+      ],
       "isBackground": true,
       "presentation": {
         "reveal": "never"
@@ -13,6 +15,15 @@
         "kind": "build",
         "isDefault": true
       }
+    },
+    {
+      "label": "webpack-compile",
+      "type": "npm",
+      "script": "compile",
+      "group": "build",
+      "problemMatcher": [
+        "$tsc"
+      ]
     }
   ]
 }
