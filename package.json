@@ -22,8 +22,8 @@
     "pretest": "npm run compile"
   },
   "contributes": {
-    "capabilities" : {
-        "hoverProvider" : "true"
+    "capabilities": {
+      "hoverProvider": "true"
     },
     "languages": [
       {
@@ -41,5 +41,8 @@
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "canvas": "^3.1.0"
   }
 }
