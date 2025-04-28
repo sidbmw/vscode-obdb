@@ -101,6 +101,7 @@ export function generateBitmapHtml(command: any, signals: Signal[]): string {
 
     // Add signal legend
     html += '<div class="signal-legend">';
+    html += '<div class="legend-content">'; // Add a content wrapper for the sticky positioning
     html += '<h3>Signal Legend</h3>';
 
     if (uniqueSignals.length > 0) {
@@ -125,12 +126,13 @@ export function generateBitmapHtml(command: any, signals: Signal[]): string {
       html += '<div class="no-signals">No mapped signals found</div>';
     }
 
+    html += '</div>'; // Close legend-content wrapper
     html += '</div>';
 
     // Close the flexible container
     html += '</div></div>';
 
-    // Add CSS for layout with improved structure
+    // Add CSS for layout with improved structure and sticky legend
     html += `
     <style>
       .bitmap-container {
@@ -169,6 +171,15 @@ export function generateBitmapHtml(command: any, signals: Signal[]): string {
         min-width: 250px;
       }
 
+      /* Add sticky positioning for the legend content */
+      .legend-content {
+        position: sticky;
+        top: 0;
+        max-height: 100vh;
+        overflow-y: auto;
+        padding-right: 5px;
+      }
+
       @media (max-width: 768px) {
         .bitmap-content-container {
           flex-direction: column;
@@ -176,6 +187,14 @@ export function generateBitmapHtml(command: any, signals: Signal[]): string {
 
         .signal-legend {
           width: 100%;
+        }
+
+        /* Disable sticky positioning in vertical layout */
+        .legend-content {
+          position: static;
+          max-height: none;
+          overflow-y: visible;
+          padding-right: 0;
         }
       }
     </style>`;
