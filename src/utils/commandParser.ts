@@ -192,3 +192,39 @@ export async function getSampleCommandResponses(commandId: string): Promise<Arra
     return [];
   }
 }
+
+/**
+ * Generates a command ID in the format used by command_support.yaml files
+ * Takes into account the RAX property when present
+ * Format with rax: hdr.rax.cmd (e.g., "7B3.7BB.220100")
+ * Format without rax: hdr.cmd (e.g., "7B3.220100")
+ *
+ * @param header The header value of the command (e.g., "7E0")
+ * @param cmd The command value (can be object or string)
+ * @param rax Optional RAX value for the command
+ * @returns Formatted command ID
+ */
+export function generateCommandId(header: string, cmd: any, rax?: string): string {
+  // Convert cmd to a string representation
+  let cmdPart: string;
+  if (typeof cmd === 'object') {
+    if (Object.keys(cmd).length === 1) {
+      const key = Object.keys(cmd)[0];
+      const value = cmd[key];
+      cmdPart = `${key}${value}`;
+    } else {
+      cmdPart = JSON.stringify(cmd).replace(/:\s+/g, '');
+    }
+  } else {
+    cmdPart = String(cmd).replace(/:\s+/g, '');
+  }
+
+  // Create a full command ID format
+  if (rax) {
+    // Format with rax: hdr.rax.cmd
+    return `${header}.${rax}.${cmdPart}`;
+  } else {
+    // Original format: hdr.cmd
+    return `${header}.${cmdPart}`;
+  }
+}

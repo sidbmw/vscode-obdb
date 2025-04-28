@@ -44,9 +44,6 @@ export function createHoverProvider(): vscode.Disposable {
           // Sort years numerically
           modelYears.sort((a, b) => parseInt(a) - parseInt(b));
 
-          // Add the signal ID title
-          markdownContent.appendMarkdown(`## ${word}\n\n`);
-
           // Add supported model years at the top
           markdownContent.appendMarkdown(`**Supported in model years:** ${modelYears.join(', ')}\n\n`);
         } else {

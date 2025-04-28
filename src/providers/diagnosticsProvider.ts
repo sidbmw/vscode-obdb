@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'yaml';
 import * as jsonc from 'jsonc-parser';
+import { generateCommandId } from '../utils/commandParser';
 
 let diagnosticCollection: vscode.DiagnosticCollection;
 
@@ -81,16 +82,18 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
 
     // Iterate through each command in the array
     for (const commandNode of commandsArrayNode.children || []) {
-      // Find the hdr and cmd properties in each command
+      // Find the hdr, rax and cmd properties in each command
       const hdrNode = findNodeAtLocation(commandNode, ["hdr"]);
       const cmdNode = findNodeAtLocation(commandNode, ["cmd"]);
+      const raxNode = findNodeAtLocation(commandNode, ["rax"]);
 
       if (hdrNode && cmdNode && hdrNode.type === 'string') {
         const header = jsonc.getNodeValue(hdrNode);
         const cmd = jsonc.getNodeValue(cmdNode);
+        const rax = raxNode ? jsonc.getNodeValue(raxNode) : undefined;
 
-        // Generate the command ID
-        const commandId = generateCommandId(header, cmd);
+        // Generate the command ID with RAX when available
+        const commandId = generateCommandId(header, cmd, rax);
 
         // Check if command is unsupported
         const isSupportedByAnyYear = await isCommandSupported(commandId);
@@ -129,18 +132,6 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
  */
 function findNodeAtLocation(rootNode: jsonc.Node, path: (string | number)[]): jsonc.Node | undefined {
   return jsonc.findNodeAtLocation(rootNode, path);
-}
-
-/**
- * Generates a command ID in the format used by command_support.yaml files
- */
-function generateCommandId(header: string, cmd: any): string {
-  if (typeof cmd === 'object' && Object.keys(cmd).length === 1) {
-    const key = Object.keys(cmd)[0];
-    const value = cmd[key];
-    return `${header}.${key}${value}`;
-  }
-  return `${header}.${JSON.stringify(cmd)}`;
 }
 
 /**

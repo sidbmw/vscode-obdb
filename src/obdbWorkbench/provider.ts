@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isPositionInCommand, getSampleCommandResponses } from '../utils/commandParser';
+import { isPositionInCommand, getSampleCommandResponses, generateCommandId } from '../utils/commandParser';
 import { extractSignals } from './signalExtractor';
 import { generateBitmapHtml } from './htmlGenerator';
 import { getWebviewContent } from './webviewContent';
@@ -187,23 +187,16 @@ export async function updateVisualizationPanel(command: any) {
   const commandName = command.name || 'Command';
   const commandId = command.id || '';
   const commandHeader = command.hdr || '';
-  const commandRax = command.rax || ''; // Added to extract the rax property
+  const commandCmdValue = command.cmd || '';
+  const commandRax = command.rax || '';
   const commandDisplay = typeof command.cmd === 'object'
     ? Object.entries(command.cmd).map(([k, v]) => `${k}: ${v}`).join(', ')
     : command.cmd?.toString() || '';
 
-  // Create a full command ID format that matches our test cases file structure
-  // Include rax when present: e.g., "7B3.7BB.220100" instead of just "7B3.220100"
+  // Use shared generateCommandId function to create the full command ID
   let fullCommandId = commandId;
   if (!fullCommandId && commandHeader) {
-    const cmdPart = commandDisplay.replace(/:\s+/g, '');
-    if (commandRax) {
-      // Format with rax: hdr.rax.cmd
-      fullCommandId = `${commandHeader}.${commandRax}.${cmdPart}`;
-    } else {
-      // Original format: hdr.cmd
-      fullCommandId = `${commandHeader}.${cmdPart}`;
-    }
+    fullCommandId = generateCommandId(commandHeader, commandCmdValue, commandRax);
   }
 
   // Fetch sample responses if we have a command ID
