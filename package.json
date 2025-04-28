@@ -4,6 +4,10 @@
   "description": "OBDb signal editing tooling.",
   "publisher": "clutchengineering",
   "version": "0.1.3",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OBDb/vscode-obdb.git"
+  },
   "engines": {
     "vscode": "^1.60.0",
     "node": ">=18.0.0"
