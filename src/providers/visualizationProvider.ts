@@ -4,8 +4,7 @@ import { Signal } from '../types';
 
 // Track webview panel and state
 let visualizationPanel: vscode.WebviewPanel | undefined;
-let lastInteractionType: 'mouse' | 'cursor' = 'cursor';
-let lastMousePosition: vscode.Position | undefined;
+// Only using cursor position, removing mouse interaction type
 let currentCommand: any | undefined;
 
 /**
@@ -27,41 +26,7 @@ export function createVisualizationProvider(): vscode.Disposable {
   disposables.push(
     vscode.window.onDidChangeTextEditorSelection(event => {
       if (event.textEditor.document.languageId === 'json') {
-        lastInteractionType = 'cursor';
         updateVisualizationFromCursor(event.textEditor);
-      }
-    })
-  );
-
-  // Track mouse movement using editor visible range changes as a proxy
-  disposables.push(
-    vscode.window.onDidChangeTextEditorVisibleRanges(event => {
-      if (event.textEditor.document.languageId === 'json') {
-        // This is a proxy for mouse movement - we'll need to use the last known position
-        if (lastMousePosition) {
-          lastInteractionType = 'mouse';
-          updateVisualizationFromPosition(event.textEditor, lastMousePosition);
-        }
-      }
-    })
-  );
-
-  // Add mouse position tracking through hover provider
-  disposables.push(
-    vscode.languages.registerHoverProvider('json', {
-      provideHover: (document, position) => {
-        // Store the mouse position whenever a hover is triggered
-        lastMousePosition = position;
-        lastInteractionType = 'mouse';
-
-        // Trigger visualization update
-        const editor = vscode.window.visibleTextEditors.find(e => e.document === document);
-        if (editor) {
-          updateVisualizationFromPosition(editor, position);
-        }
-
-        // Return undefined to allow other hover providers to work
-        return undefined;
       }
     })
   );
@@ -71,7 +36,6 @@ export function createVisualizationProvider(): vscode.Disposable {
     vscode.window.onDidChangeActiveTextEditor(editor => {
       if (editor && editor.document.languageId === 'json') {
         // Use cursor position when switching editors
-        lastInteractionType = 'cursor';
         updateVisualizationFromCursor(editor);
       } else if (editor) {
         // Hide panel when switching to non-JSON files
@@ -150,12 +114,8 @@ async function updateVisualization(document: vscode.TextDocument): Promise<void>
   const editor = vscode.window.activeTextEditor;
   if (!editor || editor.document !== document) return;
 
-  // Use the last interaction type to determine which position to use
-  if (lastInteractionType === 'mouse' && lastMousePosition) {
-    updateVisualizationFromPosition(editor, lastMousePosition);
-  } else {
-    updateVisualizationFromCursor(editor);
-  }
+  // Always update from cursor position, ignoring any potential mouse position
+  updateVisualizationFromCursor(editor);
 }
 
 /**
