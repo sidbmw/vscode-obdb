@@ -42,11 +42,11 @@ export function generateBitmapHtml(command: any, signals: Signal[]): string {
     // Get unique signals for the legend
     const uniqueSignals = getUniqueSignals(signals);
 
-    // Build HTML for bit grid
+    // Build HTML with explicit layout structure
     let html = '<div class="bitmap-container">';
 
-    // Add toggle switch for byte index format
-    html += `<div class="index-format-toggle">
+    // Add toggle switch for byte index format in its own row at the top
+    html += `<div class="index-format-row">
       <div class="toggle-label">Byte index format:</div>
       <div class="toggle-switch">
         <input type="radio" id="numeric-format" name="index-format" value="numeric" checked>
@@ -55,6 +55,9 @@ export function generateBitmapHtml(command: any, signals: Signal[]): string {
         <label for="alphabetic-format">Alphabetic</label>
       </div>
     </div>`;
+
+    // Create a flexible container for the bit grid and legend
+    html += '<div class="bitmap-content-container">';
 
     // Add bit grid table
     html += '<div class="bit-grid">';
@@ -122,7 +125,60 @@ export function generateBitmapHtml(command: any, signals: Signal[]): string {
       html += '<div class="no-signals">No mapped signals found</div>';
     }
 
+    html += '</div>';
+
+    // Close the flexible container
     html += '</div></div>';
+
+    // Add CSS for layout with improved structure
+    html += `
+    <style>
+      .bitmap-container {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .index-format-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+        width: 100%;
+      }
+
+      .toggle-label {
+        margin-right: 10px;
+        font-weight: bold;
+      }
+
+      .bitmap-content-container {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 20px;
+        width: 100%;
+      }
+
+      .bit-grid {
+        flex: 1 1 auto;
+        min-width: 300px;
+      }
+
+      .signal-legend {
+        flex: 0 1 300px;
+        min-width: 250px;
+      }
+
+      @media (max-width: 768px) {
+        .bitmap-content-container {
+          flex-direction: column;
+        }
+
+        .signal-legend {
+          width: 100%;
+        }
+      }
+    </style>`;
 
     return html;
   } catch (error) {
