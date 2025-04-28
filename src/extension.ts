@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { createHoverProvider } from './providers/hoverProvider';
-import { createVisualizationProvider } from './providers/visualizationProvider';
+import { initializeVisualizationProvider } from './providers/visualizationProvider';
 import { createDiagnosticsProvider } from './providers/diagnosticsProvider';
 
 /**
@@ -15,7 +15,7 @@ export function activate(context: vscode.ExtensionContext) {
   console.log('Registered hover provider for JSON files');
 
   // Register the visualization provider for bitmap visualizations
-  const visualizationProvider = createVisualizationProvider();
+  const visualizationProvider = initializeVisualizationProvider();
   console.log('Registered visualization provider for bitmap visualizations');
 
   // Register the diagnostics provider for command validation
