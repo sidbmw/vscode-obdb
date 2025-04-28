@@ -3,6 +3,26 @@ import { escapeHtml, formatBitRange } from './utils';
 import { createBitToSignalMap, generateSignalColors, getUniqueSignals } from './signalExtractor';
 
 /**
+ * Determines if text should be white or black based on background color brightness
+ * Uses the YIQ formula for perceived brightness
+ */
+function getContrastTextColor(hexColor: string): string {
+  // Remove # if present
+  const hex = hexColor.replace('#', '');
+
+  // Convert hex to RGB
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+
+  // Calculate perceived brightness using YIQ formula
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+  // Return black for bright backgrounds, white for dark backgrounds
+  return brightness >= 128 ? 'black' : 'white';
+}
+
+/**
  * Converts a number to alphabetic representation (A, B, C, ..., Z, AA, AB, ...)
  */
 function toAlphabetic(num: number): string {
@@ -87,7 +107,8 @@ export function generateBitmapHtml(command: any, signals: Signal[]): string {
         if (signal) {
           // Bit is mapped to a signal
           const color = signalColors[signal.id];
-          html += `<td class="bit-cell signal-bit" data-signal-id="${signal.id}" data-numeric="${absoluteBitIndex}" data-alphabetic="${alphabeticBitIndex}" style="background-color: ${color};">${absoluteBitIndex}</td>`;
+          const textColor = getContrastTextColor(color);
+          html += `<td class="bit-cell signal-bit" data-signal-id="${signal.id}" data-numeric="${absoluteBitIndex}" data-alphabetic="${alphabeticBitIndex}" style="background-color: ${color}; color: ${textColor};">${absoluteBitIndex}</td>`;
         } else {
           // Unused bit
           html += `<td class="bit-cell" data-numeric="${absoluteBitIndex}" data-alphabetic="${alphabeticBitIndex}">${absoluteBitIndex}</td>`;
@@ -108,9 +129,12 @@ export function generateBitmapHtml(command: any, signals: Signal[]): string {
       html += '<div class="legend-items">';
       uniqueSignals.forEach(signal => {
         const color = signalColors[signal.id];
+        const textColor = getContrastTextColor(color);
 
         html += `<div class="legend-item" data-signal-id="${signal.id}">`;
-        html += `<div class="color-box" style="background-color: ${color};"></div>`;
+        html += `<div class="color-box" style="background-color: ${color}; color: ${textColor};">
+        ${signal.id.slice(0, 2)}
+        </div>`;
         html += `<div class="signal-info">`;
         html += `<div class="signal-name">${escapeHtml(signal.name)}</div>`;
         html += `<div class="signal-bits">Bits: ${formatBitRange(signal.bitOffset, signal.bitOffset + signal.bitLength - 1)}</div>`;
