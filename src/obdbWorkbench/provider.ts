@@ -187,13 +187,24 @@ export async function updateVisualizationPanel(command: any) {
   const commandName = command.name || 'Command';
   const commandId = command.id || '';
   const commandHeader = command.hdr || '';
+  const commandRax = command.rax || ''; // Added to extract the rax property
   const commandDisplay = typeof command.cmd === 'object'
     ? Object.entries(command.cmd).map(([k, v]) => `${k}: ${v}`).join(', ')
     : command.cmd?.toString() || '';
 
   // Create a full command ID format that matches our test cases file structure
-  // Typically this would be in format like "7E0.22295A"
-  const fullCommandId = commandId || (commandHeader && commandDisplay ? `${commandHeader}.${commandDisplay.replace(/:\s+/g, '')}` : '');
+  // Include rax when present: e.g., "7B3.7BB.220100" instead of just "7B3.220100"
+  let fullCommandId = commandId;
+  if (!fullCommandId && commandHeader) {
+    const cmdPart = commandDisplay.replace(/:\s+/g, '');
+    if (commandRax) {
+      // Format with rax: hdr.rax.cmd
+      fullCommandId = `${commandHeader}.${commandRax}.${cmdPart}`;
+    } else {
+      // Original format: hdr.cmd
+      fullCommandId = `${commandHeader}.${cmdPart}`;
+    }
+  }
 
   // Fetch sample responses if we have a command ID
   const sampleResponses = fullCommandId ? await getSampleCommandResponses(fullCommandId) : [];
