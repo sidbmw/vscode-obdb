@@ -4,8 +4,12 @@ import * as path from 'path';
 import * as yaml from 'yaml';
 import * as jsonc from 'jsonc-parser';
 import { generateCommandId } from '../utils/commandParser';
+import { SignalLinter } from '../linter/signalLinter';
+import { SignalLinterCodeActionProvider } from './signalLinterCodeActionProvider';
 
 let diagnosticCollection: vscode.DiagnosticCollection;
+const signalLinter = new SignalLinter();
+const signalLinterCodeActionProvider = new SignalLinterCodeActionProvider();
 
 /**
  * Creates a diagnostics provider for marking unsupported commands
@@ -15,6 +19,14 @@ export function createDiagnosticsProvider(): vscode.Disposable {
   diagnosticCollection = vscode.languages.createDiagnosticCollection('obdb-commands');
 
   const disposables: vscode.Disposable[] = [];
+
+  // Register code action provider for JSON files
+  disposables.push(
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'json' },
+      signalLinterCodeActionProvider
+    )
+  );
 
   // Update diagnostics when a document is opened or changed
   disposables.push(
@@ -60,6 +72,7 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
 
   try {
     const diagnostics: vscode.Diagnostic[] = [];
+    const lintResults: any[] = [];
 
     // Parse the JSON document using jsonc-parser
     const text = document.getText();
@@ -68,6 +81,7 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
     if (!rootNode) {
       // Not valid JSON, nothing to do
       diagnosticCollection.set(document.uri, []);
+      signalLinterCodeActionProvider.clearLintResults(document.uri.toString());
       return;
     }
 
@@ -77,6 +91,7 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
     if (!commandsArrayNode || commandsArrayNode.type !== 'array') {
       // No commands array found
       diagnosticCollection.set(document.uri, []);
+      signalLinterCodeActionProvider.clearLintResults(document.uri.toString());
       return;
     }
 
@@ -87,6 +102,7 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
       const cmdNode = findNodeAtLocation(commandNode, ["cmd"]);
       const raxNode = findNodeAtLocation(commandNode, ["rax"]);
       const dbgNode = findNodeAtLocation(commandNode, ["dbg"]);
+      const signalsNode = findNodeAtLocation(commandNode, ["signals"]);
 
       // Check for debug commands and add warning
       if (dbgNode && dbgNode.type === 'boolean' && jsonc.getNodeValue(dbgNode) === true) {
@@ -105,6 +121,7 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
         }
       }
 
+      // Process command validation
       if (hdrNode && cmdNode && hdrNode.type === 'string') {
         const header = jsonc.getNodeValue(hdrNode);
         const cmd = jsonc.getNodeValue(cmdNode);
@@ -135,13 +152,35 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
           }
         }
       }
+
+      // Process signals linting
+      if (signalsNode && signalsNode.type === 'array' && signalsNode.children) {
+        for (const signalNode of signalsNode.children) {
+          try {
+            const signal = jsonc.getNodeValue(signalNode);
+            const signalLintResults = signalLinter.lintSignal(signal, signalNode);
+
+            // Store lint results for the code action provider
+            lintResults.push(...signalLintResults);
+
+            // Convert lint results to diagnostics
+            diagnostics.push(...signalLinter.toDiagnostics(document, signalLintResults));
+          } catch (err) {
+            console.error('Error linting signal:', err);
+          }
+        }
+      }
     }
+
+    // Store the lint results in the code action provider
+    signalLinterCodeActionProvider.setLintResults(document.uri.toString(), lintResults);
 
     // Update diagnostics
     diagnosticCollection.set(document.uri, diagnostics);
   } catch (err) {
     console.error('Error updating diagnostics:', err);
     diagnosticCollection.set(document.uri, []);
+    signalLinterCodeActionProvider.clearLintResults(document.uri.toString());
   }
 }
 
