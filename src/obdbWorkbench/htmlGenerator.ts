@@ -37,6 +37,41 @@ function toAlphabetic(num: number): string {
 }
 
 /**
+ * Calculate the minimum and maximum value ranges for a signal based on the formula
+ * @param signal The signal to calculate ranges for
+ * @returns An object containing min and max values or undefined if formula parameters are not available
+ */
+function calculateFormulaRange(signal: any): { min: number, max: number } | undefined {
+  // Extract formula parameters (mul, div, add) from the signal's fmt property
+  if (!signal.fmt) {
+    return undefined;
+  }
+
+  const mul = signal.fmt.mul || 1;
+  const div = signal.fmt.div || 1;
+  const add = signal.fmt.add || 0;
+  const len = signal.fmt.len;
+
+  // If no length specified, we can't calculate the range
+  if (typeof len !== 'number') {
+    return undefined;
+  }
+
+  // Calculate the max possible raw value based on bit length
+  const maxRawValue = Math.pow(2, len) - 1;
+
+  // Calculate the range using the formula: x = v * mul / div + add
+  const minPossibleValue = (0 * mul / div) + add;
+  const maxPossibleValue = (maxRawValue * mul / div) + add;
+
+  // Return the range, rounded to 6 decimal places for display
+  return {
+    min: Number(minPossibleValue.toFixed(6)),
+    max: Number(maxPossibleValue.toFixed(6))
+  };
+}
+
+/**
  * Generate HTML for bitmap visualization table
  */
 export function generateBitmapHtml(command: any, signals: Signal[]): string {
@@ -138,6 +173,47 @@ export function generateBitmapHtml(command: any, signals: Signal[]): string {
         html += `<div class="signal-info">`;
         html += `<div class="signal-name">${escapeHtml(signal.name)}</div>`;
         html += `<div class="signal-bits">Bits: ${formatBitRange(signal.bitOffset, signal.bitOffset + signal.bitLength - 1)}</div>`;
+
+        // Add formula visualization if fmt properties are available
+        const originalSignal = command.signals?.find((s: any) => s.id === signal.id);
+        if (originalSignal && originalSignal.fmt) {
+          const formulaRange = calculateFormulaRange(originalSignal);
+          if (formulaRange) {
+            const mul = originalSignal.fmt.mul || 1;
+            const div = originalSignal.fmt.div || 1;
+            const add = originalSignal.fmt.add || 0;
+
+            // Build formula parts only if they differ from default values
+            let formulaParts = ['v'];
+
+            // Add multiplication only if mul is not 1
+            if (mul !== 1) {
+              formulaParts[0] = `${formulaParts[0]} × ${mul}`;
+            }
+
+            // Add division only if div is not 1
+            if (div !== 1) {
+              formulaParts[0] = `${formulaParts[0]} / ${div}`;
+            }
+
+            // Add addition only if add is not 0
+            if (add !== 0) {
+              formulaParts.push(`${add > 0 ? '+' : '-'} ${Math.abs(add)}`);
+            }
+
+            // Combine all parts into the final formula display
+            const formulaDisplay = `<code>x = ${formulaParts.join(' ')}</code>`;
+
+            // Only show formula if it's not just "x = v"
+            const showFormula = mul !== 1 || div !== 1 || add !== 0;
+
+            if (showFormula) {
+              html += `<div class="signal-formula">Formula: ${formulaDisplay}</div>`;
+            }
+
+            html += `<div class="formula-range">Range: ${formulaRange.min} to ${formulaRange.max}</div>`;
+          }
+        }
 
         if (signal.suggestedMetric) {
           html += `<div class="metric-tag">${escapeHtml(signal.suggestedMetric)}</div>`;

@@ -177,6 +177,20 @@ export function getWebviewContent(
     'color: var(--vscode-descriptionForeground);' +
     'font-size: 0.9em;' +
     '}' +
+    '.signal-formula {' +
+    'color: var(--vscode-descriptionForeground);' +
+    'font-size: 0.9em;' +
+    'margin-top: 4px;' +
+    '}' +
+    '.formula-range {' +
+    'display: inline-block;' +
+    'margin-top: 4px;' +
+    'padding: 2px 6px;' +
+    'background-color: var(--vscode-editorInlayHint-background);' +
+    'border-radius: 3px;' +
+    'font-size: 0.85em;' +
+    'color: var(--vscode-editorInlayHint-foreground);' +
+    '}' +
     '.metric-tag {' +
     'background-color: var(--vscode-badge-background, #4070f4);' +
     'color: var(--vscode-badge-foreground, white);' +
