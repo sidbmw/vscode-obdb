@@ -6,6 +6,7 @@ import { OdometerIdNamingRule } from './rules/odometerIdNamingRule';
 import { SignalNamingConventionRule } from './rules/signalNamingConventionRule';
 import { SuggestedMetricValidationRule } from './rules/suggestedMetricValidationRule';
 import { FormulaRangeValidationRule } from './rules/formulaRangeValidationRule';
+import { SignalBitOverlapRule } from './rules/signalBitOverlapRule';
 
 /**
  * Registry that manages all linter rules
@@ -41,7 +42,8 @@ export class RuleRegistry {
       OdometerIdNamingRule,
       SignalNamingConventionRule,
       SuggestedMetricValidationRule,
-      FormulaRangeValidationRule
+      FormulaRangeValidationRule,
+      SignalBitOverlapRule
     ];
 
     // Instantiate each rule class
