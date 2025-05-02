@@ -5,6 +5,7 @@ import { ILinterRule, LinterRuleConfig } from './rules/rule';
 import { OdometerIdNamingRule } from './rules/odometerIdNamingRule';
 import { SignalNamingConventionRule } from './rules/signalNamingConventionRule';
 import { SuggestedMetricValidationRule } from './rules/suggestedMetricValidationRule';
+import { FormulaRangeValidationRule } from './rules/formulaRangeValidationRule';
 
 /**
  * Registry that manages all linter rules
@@ -39,7 +40,8 @@ export class RuleRegistry {
     const ruleClasses = [
       OdometerIdNamingRule,
       SignalNamingConventionRule,
-      SuggestedMetricValidationRule
+      SuggestedMetricValidationRule,
+      FormulaRangeValidationRule
     ];
 
     // Instantiate each rule class
