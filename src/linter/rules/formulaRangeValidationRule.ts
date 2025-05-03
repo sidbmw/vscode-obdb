@@ -37,36 +37,46 @@ export class FormulaRangeValidationRule implements ILinterRule {
     const div = signal.fmt.div || 1;
     const mul = signal.fmt.mul || 1;
     const add = signal.fmt.add || 0;
+    const isSigned = signal.fmt.sign === true;
 
     // Check if len is defined
     if (typeof len !== 'number') {
       return null;
     }
 
-    // Calculate the max possible raw value based on bit length
-    const maxRawValue = Math.pow(2, len) - 1;
+    // Calculate the min/max possible raw values based on bit length and signedness
+    let minRawValue: number;
+    let maxRawValue: number;
 
-    // Calculate the max possible value after applying the formula: x = value * mul / div + add
+    if (isSigned) {
+      // For signed values, the range is from -2^(len-1) to 2^(len-1) - 1
+      minRawValue = -Math.pow(2, len - 1);
+      maxRawValue = Math.pow(2, len - 1) - 1;
+    } else {
+      // For unsigned values, the range is from 0 to 2^len - 1
+      minRawValue = 0;
+      maxRawValue = Math.pow(2, len) - 1;
+    }
+
+    // Calculate the min/max possible values after applying the formula: x = value * mul / div + add
+    const minPossibleValue = (minRawValue * mul / div) + add;
     const maxPossibleValue = (maxRawValue * mul / div) + add;
 
-    // Default min is 0 if not specified
+    // Default min is 0 if not specified, unless it's signed
     const minSpecified = typeof signal.fmt.min === 'number';
-    const minValue = minSpecified ? signal.fmt.min : 0;
+    const minValue = minSpecified ? signal.fmt.min : (isSigned ? minPossibleValue : 0);
 
     // If min is specified, check if it's below the minimum possible value
     if (minSpecified) {
-      const minPossibleValue = (0 * mul / div) + add;
-
       if (minValue < minPossibleValue) {
         const minNode = jsonc.findNodeAtLocation(fmtNode, ['min']);
         if (minNode) {
           // Suggest fixing the min value
-          const suggestedMin = minPossibleValue;
-          const roundedSuggestedMin = Number(suggestedMin.toFixed(6));
+          const roundedSuggestedMin = Number(minPossibleValue.toFixed(6));
 
           return {
             ruleId: this.getConfig().id,
-            message: `Signal min value (${minValue}) is below the minimum possible value (${roundedSuggestedMin}) given the formula parameters.`,
+            message: `Signal min value (${minValue}) is below the minimum possible value (${roundedSuggestedMin}) given the formula parameters${isSigned ? ' with signed encoding' : ''}.`,
             node: minNode,
             suggestion: {
               title: `Change min to ${roundedSuggestedMin}`,
@@ -93,7 +103,7 @@ export class FormulaRangeValidationRule implements ILinterRule {
 
         return {
           ruleId: this.getConfig().id,
-          message: `Signal max value (${signal.fmt.max}) exceeds the maximum possible value (${roundedMaxPossible}) given the formula parameters.`,
+          message: `Signal max value (${signal.fmt.max}) exceeds the maximum possible value (${roundedMaxPossible}) given the formula parameters${isSigned ? ' with signed encoding' : ''}.`,
           node: maxNode,
           suggestion: {
             title: `Change max to ${roundedMaxPossible}`,
