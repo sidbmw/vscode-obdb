@@ -210,6 +210,7 @@ export class TestExplorerProvider {
         success: boolean;
         testIndex?: number;
         isDebug: boolean;
+        errorMessage?: string;
     }) {
         const filePath = event.uri.fsPath;
         const testItem = this.yamlTestItems.get(filePath);
@@ -240,7 +241,8 @@ export class TestExplorerProvider {
         if (event.success) {
             run.passed(testItem);
         } else {
-            run.failed(testItem, new vscode.TestMessage('Test execution failed'));
+            const errorMessage = event.errorMessage || 'Test execution failed';
+            run.failed(testItem, new vscode.TestMessage(errorMessage));
         }
 
         // Complete the run after a brief delay

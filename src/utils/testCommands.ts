@@ -30,6 +30,7 @@ export const testExecutionEvent = new vscode.EventEmitter<{
     success: boolean;
     testIndex?: number;
     isDebug: boolean;
+    errorMessage?: string;
 }>();
 
 /**
@@ -59,29 +60,32 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
 
             try {
                 // Run the Python tests with the test file
-                const success = await runPythonTests(uri, false);
+                const result = await runPythonTests(uri, false);
 
-                if (!success) {
+                if (!result.success) {
                     vscode.window.showErrorMessage(
-                        `Failed to run tests for command ${testData[0].commandId}`
+                        `Failed to run tests for command ${testData[0].commandId}: ${result.errorMessage}`
                     );
                 }
 
                 // Notify test execution event with the result
                 testExecutionEvent.fire({
                     uri: uri,
-                    success: success,
-                    isDebug: false
+                    success: result.success,
+                    isDebug: false,
+                    errorMessage: result.errorMessage
                 });
-            } catch (error) {
+            } catch (error: unknown) {
                 console.error("Error running tests:", error);
-                vscode.window.showErrorMessage(`Error running tests: ${error}`);
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                vscode.window.showErrorMessage(`Error running tests: ${errorMessage}`);
 
                 // Notify test execution event with failure
                 testExecutionEvent.fire({
                     uri: uri,
                     success: false,
-                    isDebug: false
+                    isDebug: false,
+                    errorMessage: errorMessage
                 });
             }
         }
@@ -108,23 +112,26 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
 
             try {
                 // Start a debug session for the Python tests
-                const success = await debugPythonTests(uri);
+                const result = await debugPythonTests(uri);
 
                 // Notify test execution event with the result
                 testExecutionEvent.fire({
                     uri: uri,
-                    success: success,
-                    isDebug: true
+                    success: result.success,
+                    isDebug: true,
+                    errorMessage: result.errorMessage
                 });
-            } catch (error) {
+            } catch (error: unknown) {
                 console.error("Error debugging tests:", error);
-                vscode.window.showErrorMessage(`Error debugging tests: ${error}`);
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                vscode.window.showErrorMessage(`Error debugging tests: ${errorMessage}`);
 
                 // Notify test execution event with failure
                 testExecutionEvent.fire({
                     uri: uri,
                     success: false,
-                    isDebug: true
+                    isDebug: true,
+                    errorMessage: errorMessage
                 });
             }
         }
@@ -177,9 +184,9 @@ async function findPythonExecutable(): Promise<string> {
  * Run Python tests for the given test file
  * @param uri URI of the test file to run
  * @param debug Whether to run in debug mode
- * @returns Promise that resolves to true if tests pass, false otherwise
+ * @returns Promise that resolves to an object with success status and error details
  */
-async function runPythonTests(uri: vscode.Uri, debug: boolean = false): Promise<boolean> {
+async function runPythonTests(uri: vscode.Uri, debug: boolean = false): Promise<{success: boolean, errorMessage?: string}> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) {
         throw new Error("No workspace folders found");
@@ -209,7 +216,7 @@ async function runPythonTests(uri: vscode.Uri, debug: boolean = false): Promise<
         throw new Error(`Could not find the run_tests.py script at ${runTestsScriptPath}`);
     }
 
-    return new Promise<boolean>((resolve, reject) => {
+    return new Promise<{success: boolean, errorMessage?: string}>((resolve, reject) => {
         // Use the run_tests.py script to run the test file
         const pythonArgs = [
             runTestsScriptPath,
@@ -243,12 +250,24 @@ async function runPythonTests(uri: vscode.Uri, debug: boolean = false): Promise<
         pythonProcess.on('close', (code) => {
             if (code === 0) {
                 // Tests passed
-                resolve(true);
+                resolve({ success: true });
             } else {
                 // Tests failed
                 console.error(`Python tests failed with code ${code}`);
                 console.error(`Error output: ${errorOutput}`);
-                resolve(false);
+
+                // Format a detailed error message
+                let errorMessage = `Test execution failed with exit code ${code}`;
+                if (errorOutput) {
+                    // Clean up error output for display
+                    const formattedError = errorOutput.trim()
+                        .replace(/\n+/g, '\n')  // Replace multiple newlines with a single one
+                        .replace(/\s+$/, '');   // Remove trailing whitespace
+
+                    errorMessage = `${errorMessage}\n\n${formattedError}`;
+                }
+
+                resolve({ success: false, errorMessage });
             }
         });
 
@@ -261,9 +280,9 @@ async function runPythonTests(uri: vscode.Uri, debug: boolean = false): Promise<
 /**
  * Start a debug session for Python tests
  * @param uri URI of the test file to debug
- * @returns Promise that resolves to true if debug session started successfully
+ * @returns Promise that resolves to an object with success status and error details
  */
-async function debugPythonTests(uri: vscode.Uri): Promise<boolean> {
+async function debugPythonTests(uri: vscode.Uri): Promise<{success: boolean, errorMessage?: string}> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) {
         throw new Error("No workspace folders found");
@@ -283,7 +302,7 @@ async function debugPythonTests(uri: vscode.Uri): Promise<boolean> {
     const pythonExecutable = await findPythonExecutable();
 
     // Path to the run_tests.py script
-    const runTestsScriptPath = path.join(path.dirname(schemaPythonPath), 'run_tests.py');
+    const runTestsScriptPath = path.join(schemaPythonPath, 'run_tests.py');
 
     // Check if the run_tests.py script exists
     try {
@@ -315,10 +334,16 @@ async function debugPythonTests(uri: vscode.Uri): Promise<boolean> {
             `Debug session started for test file: ${path.basename(testFilePath)}`
         );
 
-        return true;
-    } catch (error) {
+        // We don't have a way to know if debugging succeeded or failed,
+        // so we'll just return success and let user see the results in the debugger
+        return { success: true };
+    } catch (error: unknown) {
         console.error("Error starting debug session:", error);
-        return false;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+            success: false,
+            errorMessage: `Failed to start debug session: ${errorMessage}`
+        };
     }
 }
 
