@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import * as jsonc from 'jsonc-parser';
 
 /**
  * Creates a definition provider for YAML files that enables Cmd+Click navigation
@@ -53,11 +54,11 @@ class CommandDefinitionProvider implements vscode.DefinitionProvider {
     }
 
     try {
-      // Find the signalset definition file for this command and model year
-      const signalsetUri = await this.findSignalsetForCommand(commandId, modelYear);
-      if (signalsetUri) {
+      // Find the signalset definition file and position for this command and model year
+      const definition = await this.findSignalsetDefinitionForCommand(commandId, modelYear);
+      if (definition) {
         // Return the definition location
-        return new vscode.Location(signalsetUri, new vscode.Position(0, 0));
+        return new vscode.Location(definition.uri, definition.range);
       }
     } catch (error) {
       console.error(`Error finding definition for command ${commandId}:`, error);
@@ -80,12 +81,12 @@ class CommandDefinitionProvider implements vscode.DefinitionProvider {
   }
 
   /**
-   * Find the signalset file that contains the definition for this command
+   * Find the signalset file and position that contains the definition for this command
    */
-  private async findSignalsetForCommand(
+  private async findSignalsetDefinitionForCommand(
     commandId: string,
     modelYear: string
-  ): Promise<vscode.Uri | undefined> {
+  ): Promise<{ uri: vscode.Uri, range: vscode.Range } | undefined> {
     try {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -96,8 +97,6 @@ class CommandDefinitionProvider implements vscode.DefinitionProvider {
 
       // Check the model year specific signalset file in v3 directory first
       const potentialSignalsetPaths = [
-        // Check year-specific signalset in v3
-        path.join(rootPath, 'signalsets', 'v3', `${modelYear}.json`),
         // Check year range signalsets (e.g., 2015-2018.json)
         ...await this.findYearRangeSignalsets(rootPath, parseInt(modelYear)),
         // Fallback to default signalset
@@ -107,10 +106,13 @@ class CommandDefinitionProvider implements vscode.DefinitionProvider {
       // Check each potential signalset file
       for (const signalsetPath of potentialSignalsetPaths) {
         if (fs.existsSync(signalsetPath)) {
-          // Check if the command exists in this signalset
-          const hasCommand = await this.checkSignalsetForCommand(signalsetPath, commandId);
-          if (hasCommand) {
-            return vscode.Uri.file(signalsetPath);
+          // Check if the command exists in this signalset and get its position
+          const position = await this.findCommandPositionInFile(signalsetPath, commandId);
+          if (position) {
+            return {
+              uri: vscode.Uri.file(signalsetPath),
+              range: position
+            };
           }
         }
       }
@@ -154,126 +156,137 @@ class CommandDefinitionProvider implements vscode.DefinitionProvider {
   }
 
   /**
-   * Check if a signalset file contains a specific command
+   * Find the exact position of a command in a signalset file
    */
-  private async checkSignalsetForCommand(signalsetPath: string, commandId: string): Promise<boolean> {
+  private async findCommandPositionInFile(
+    signalsetPath: string,
+    commandId: string
+  ): Promise<vscode.Range | undefined> {
     try {
       const content = await fs.promises.readFile(signalsetPath, 'utf-8');
-      const signalset = JSON.parse(content);
 
-      // Check if commands exist in the signalset
-      if (!signalset.commands || !Array.isArray(signalset.commands)) {
-        return false;
-      }
-
-      // Deconstruct the command ID into components
-      // Format can be "7E0.2210E0" or "7E0.7E8.2210E0"
+      // Parse the command ID components
       const parts = commandId.split('.');
-
-      // Initialize components
       let hdr: string | undefined;
       let rax: string | undefined;
       let cmdValue: string | undefined;
 
       if (parts.length === 2) {
-        // Format: "7E0.2210E0"
         hdr = parts[0];
         cmdValue = parts[1];
       } else if (parts.length === 3) {
-        // Format: "7E0.7E8.2210E0"
         hdr = parts[0];
         rax = parts[1];
         cmdValue = parts[2];
       } else {
-        // Unsupported format
-        return false;
+        return undefined;
       }
 
-      // Split the command value into service ID (first 2 chars) and parameter ID (remaining chars)
-      // Example: "2210E0" -> service: "22", parameter: "10E0"
+      // Split cmdValue into service ID and parameter ID
       if (!cmdValue || cmdValue.length < 4) {
-        return false; // Command must have at least 4 characters (2 for service + at least 2 for parameter)
+        return undefined;
       }
 
       const serviceId = cmdValue.substring(0, 2);
       const parameterId = cmdValue.substring(2);
 
-      // Create command object for comparison
-      const cmdObj: Record<string, string> = {
-        [serviceId]: parameterId
-      };
+      // Parse the JSON to get the AST
+      const rootNode = jsonc.parseTree(content);
+      if (!rootNode) {
+        return undefined;
+      }
 
-      // Check commands for a match
-      for (const command of signalset.commands) {
-        // Check exact match with id property first
-        if (command.id === commandId) {
-          return true;
-        }
+      // Find the commands array node
+      const commandsNode = jsonc.findNodeAtLocation(rootNode, ['commands']);
+      if (!commandsNode || !commandsNode.children) {
+        return undefined;
+      }
 
-        // Check against deconstructed parts
-        let headerMatch = false;
-        let raxMatch = true;  // Default to true when rax is not specified in command ID
-        let cmdMatch = false;
+      // Iterate through the commands array to find the matching command
+      for (const commandNode of commandsNode.children) {
+        // Check individual components
+        let headerMatches = false;
+        let raxMatches = rax ? false : true; // If rax is not in commandId, default to true
+        let cmdMatches = false;
 
         // Check header match
-        if (command.hdr) {
-          // Simple string comparison
-          if (typeof command.hdr === 'string' && command.hdr === hdr) {
-            headerMatch = true;
-          }
-          // Handle object with text property
-          else if (typeof command.hdr === 'object' && command.hdr.text === hdr) {
-            headerMatch = true;
+        const hdrNode = jsonc.findNodeAtLocation(commandNode, ['hdr']);
+        if (hdrNode) {
+          if (typeof hdrNode.value === 'string' && hdrNode.value === hdr) {
+            headerMatches = true;
+          } else if (typeof hdrNode.value === 'object' && hdrNode.value.text === hdr) {
+            headerMatches = true;
           }
         }
 
-        // Check rax match if provided in command ID
-        if (rax && command.rax) {
-          raxMatch = false;  // Reset to false since we need to check
-          // Simple string comparison
-          if (typeof command.rax === 'string' && command.rax === rax) {
-            raxMatch = true;
-          }
-          // Handle object with text property
-          else if (typeof command.rax === 'object' && command.rax.text === rax) {
-            raxMatch = true;
+        // Check rax match if applicable
+        if (rax) {
+          const raxNode = jsonc.findNodeAtLocation(commandNode, ['rax']);
+          if (raxNode) {
+            if (typeof raxNode.value === 'string' && raxNode.value === rax) {
+              raxMatches = true;
+            } else if (typeof raxNode.value === 'object' && raxNode.value.text === rax) {
+              raxMatches = true;
+            }
+          } else {
+            raxMatches = true;
           }
         }
 
         // Check cmd match
-        if (command.cmd) {
-          // Simple string comparison for the entire cmd value
-          if (typeof command.cmd === 'string' && command.cmd === cmdValue) {
-            cmdMatch = true;
-          }
-          // Handle object with text property
-          else if (typeof command.cmd === 'object' && command.cmd.text === cmdValue) {
-            cmdMatch = true;
-          }
-          // Handle {serviceId: parameterId} format (e.g. {"22": "10E0"})
-          else if (typeof command.cmd === 'object' && serviceId in command.cmd) {
-            const parameterValue = command.cmd[serviceId];
-
-            // Direct match
-            if (parameterValue === parameterId) {
-              cmdMatch = true;
-            }
-            // Handle nested object with text property
-            else if (typeof parameterValue === 'object' && parameterValue.text === parameterId) {
-              cmdMatch = true;
+        const cmdNode = jsonc.findNodeAtLocation(commandNode, ['cmd']);
+        if (cmdNode) {
+          const cmd = jsonc.getNodeValue(cmdNode);
+          if (typeof cmd === 'object') {
+            if (Object.keys(cmd).length === 1) {
+              const key = Object.keys(cmd)[0];
+              const value = cmd[key];
+              cmdMatches = `${key}${value}` == cmdValue;
             }
           }
         }
 
-        // If all parts match, we found the right command
-        if (headerMatch && raxMatch && cmdMatch) {
-          return true;
+        // If all components match, we've found our command
+        if (headerMatches && raxMatches && cmdMatches) {
+          // Return the range of the entire command object
+          return new vscode.Range(
+            this.getPositionFromOffset(content, commandNode.offset),
+            this.getPositionFromOffset(content, commandNode.offset + commandNode.length)
+          );
         }
       }
     } catch (error) {
-      console.error(`Error checking signalset ${signalsetPath} for command ${commandId}:`, error);
+      console.error(`Error finding command position in ${signalsetPath}:`, error);
     }
 
-    return false;
+    return undefined;
+  }
+
+  /**
+   * Convert a character offset to a Position object
+   */
+  private getPositionFromOffset(text: string, offset: number): vscode.Position {
+    // Count newlines and character position
+    let line = 0;
+    let character = 0;
+    let currentOffset = 0;
+
+    const lines = text.split('\n');
+
+    for (let i = 0; i < lines.length; i++) {
+      const lineLength = lines[i].length;
+
+      // If the offset is within this line
+      if (currentOffset + lineLength >= offset) {
+        line = i;
+        character = offset - currentOffset;
+        break;
+      }
+
+      // Move to the next line (add 1 for the newline character)
+      currentOffset += lineLength + 1;
+    }
+
+    return new vscode.Position(line, character);
   }
 }
