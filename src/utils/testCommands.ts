@@ -264,6 +264,12 @@ async function runPythonTests(uri: vscode.Uri, debug: boolean = false): Promise<
                         .replace(/\n+/g, '\n')  // Replace multiple newlines with a single one
                         .replace(/\s+$/, '');   // Remove trailing whitespace
 
+                    // Try to extract the specific assertion error message
+                    const assertionErrorMatch = errorOutput.match(/AssertionError: (.+?)(\n|$)/);
+                    if (assertionErrorMatch && assertionErrorMatch[1]) {
+                        errorMessage = `AssertionError: ${assertionErrorMatch[1]}`;
+                    }
+
                     errorMessage = `${errorMessage}\n\n${formattedError}`;
                 }
 
