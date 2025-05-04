@@ -50,40 +50,31 @@ export class TestCodeLensProvider implements vscode.CodeLensProvider {
                 return [];
             }
 
-            // Find each test case in the file
-            const testCases = yamlDoc.get('test_cases');
-            if (!testCases) {
-                return [];
-            }
+            // Find the 'test_cases:' property in the document
+            const testCasesPattern = /test_cases:/g;
+            const match = testCasesPattern.exec(text);
 
-            // Find where 'response:' is defined in each test case
-            let testCaseCount = 0;
-            let position = 0;
-            const responsePattern = /response: (\|-)?/g;
-            let match: RegExpExecArray | null;
-
-            while ((match = responsePattern.exec(text)) !== null) {
-                // Found a response field
+            if (match) {
+                // Found the test_cases property
                 const matchStart = match.index;
                 const startPos = document.positionAt(matchStart);
                 const endPos = document.positionAt(matchStart + match[0].length);
                 const range = new vscode.Range(startPos, endPos);
 
-                // Create code lenses for run and debug actions
-                const runLens = new vscode.CodeLens(range, {
-                    title: "$(play) Run Test",
-                    command: "obdb.runTest",
-                    arguments: [document.uri, testCaseCount]
+                // Create code lenses for run all and debug all actions
+                const runAllLens = new vscode.CodeLens(range, {
+                    title: "$(play) Run All Tests",
+                    command: "obdb.runAllTests",
+                    arguments: [document.uri]
                 });
 
-                const debugLens = new vscode.CodeLens(range, {
-                    title: "$(debug) Debug Test",
-                    command: "obdb.debugTest",
-                    arguments: [document.uri, testCaseCount]
+                const debugAllLens = new vscode.CodeLens(range, {
+                    title: "$(debug) Debug All Tests",
+                    command: "obdb.debugAllTests",
+                    arguments: [document.uri]
                 });
 
-                codeLenses.push(runLens, debugLens);
-                testCaseCount++;
+                codeLenses.push(runAllLens, debugAllLens);
             }
 
             return codeLenses;

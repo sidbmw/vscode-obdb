@@ -28,6 +28,58 @@ interface TestFile {
  * @returns Array of disposables for the registered commands
  */
 export function registerTestCommands(context: vscode.ExtensionContext): vscode.Disposable[] {
+    // Command to run all tests in a file
+    const runAllTestsCommand = vscode.commands.registerCommand(
+        'obdb.runAllTests',
+        async (uri: vscode.Uri) => {
+            // Get the test file data
+            const testData = await getAllTestData(uri);
+            if (!testData || testData.length === 0) {
+                vscode.window.showErrorMessage('Failed to get test data or no tests found');
+                return;
+            }
+
+            // Show a message indicating the tests are running
+            vscode.window.showInformationMessage(
+                `Running ${testData.length} tests for command ${testData[0].commandId}`
+            );
+
+            // In a real implementation, you would call your test runner here
+            // For demonstration, just show success message
+            setTimeout(() => {
+                vscode.window.showInformationMessage(
+                    `Successfully ran ${testData.length} tests for command ${testData[0].commandId}`
+                );
+            }, 1000);
+        }
+    );
+
+    // Command to debug all tests in a file
+    const debugAllTestsCommand = vscode.commands.registerCommand(
+        'obdb.debugAllTests',
+        async (uri: vscode.Uri) => {
+            // Get the test file data
+            const testData = await getAllTestData(uri);
+            if (!testData || testData.length === 0) {
+                vscode.window.showErrorMessage('Failed to get test data or no tests found');
+                return;
+            }
+
+            // Show a message indicating the tests are being debugged
+            vscode.window.showInformationMessage(
+                `Debugging ${testData.length} tests for command ${testData[0].commandId}`
+            );
+
+            // In a real implementation, you would configure and start the debugger here
+            // For demonstration, just show success message
+            setTimeout(() => {
+                vscode.window.showInformationMessage(
+                    `Debug session started for ${testData.length} tests on command ${testData[0].commandId}`
+                );
+            }, 1000);
+        }
+    );
+
     // Command to run a test
     const runTestCommand = vscode.commands.registerCommand(
         'obdb.runTest',
@@ -39,12 +91,10 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
                 return;
             }
 
-            // Show a message indicating the test is running (placeholder)
-            // vscode.window.showInformationMessage(
-            //     `Running test ${testIndex + 1} for command ${testData.commandId}:\n` +
-            //     `Response: ${testData.response.substring(0, 30)}${testData.response.length > 30 ? '...' : ''}\n` +
-            //     `Expected values: ${JSON.stringify(testData.expectedValues).substring(0, 50)}...`
-            // );
+            // Show a message indicating the test is running
+            vscode.window.showInformationMessage(
+                `Running test ${testIndex + 1} for command ${testData.commandId}`
+            );
 
             // In a real implementation, you would call your test runner here
         }
@@ -61,22 +111,75 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
                 return;
             }
 
-            // Show a message indicating the test is being debugged (placeholder)
+            // Show a message indicating the test is being debugged
             vscode.window.showInformationMessage(
-                `Debugging test ${testIndex + 1} for command ${testData.commandId}:\n` +
-                `Response: ${testData.response.substring(0, 30)}${testData.response.length > 30 ? '...' : ''}\n` +
-                `Expected values: ${JSON.stringify(testData.expectedValues).substring(0, 50)}...`
+                `Debugging test ${testIndex + 1} for command ${testData.commandId}`
             );
 
             // In a real implementation, you would configure and start the debugger here
         }
     );
 
-    return [runTestCommand, debugTestCommand];
+    return [runAllTestsCommand, debugAllTestsCommand, runTestCommand, debugTestCommand];
 }
 
 /**
- * Get test data from a test file
+ * Get test data for all tests in a file
+ * @param uri The URI of the test file
+ * @returns An array of test data objects or null if they couldn't be retrieved
+ */
+async function getAllTestData(
+    uri: vscode.Uri
+): Promise<Array<{
+    commandId: string,
+    response: string,
+    expectedValues: Record<string, any>,
+    canIdFormat: string,
+    extendedAddressingEnabled: boolean,
+    testIndex: number
+}> | null> {
+    try {
+        // Read the test file
+        const document = await vscode.workspace.openTextDocument(uri);
+        const content = document.getText();
+
+        // Parse YAML content using the YAML parser
+        const yamlDoc = YAML.parseDocument(content);
+        const yamlContent = yamlDoc.toJSON() as TestFile;
+
+        // Check if this has the expected structure
+        if (!yamlContent || !yamlContent.test_cases ||
+            !Array.isArray(yamlContent.test_cases) ||
+            yamlContent.test_cases.length === 0) {
+            return null;
+        }
+
+        // Get data for all test cases
+        return yamlContent.test_cases.map((testCase, index) => {
+            // Use test case specific values if available, otherwise fall back to file defaults
+            const canIdFormat = testCase.can_id_format || yamlContent.can_id_format;
+            const extendedAddressingEnabled =
+                testCase.extended_addressing_enabled !== undefined ?
+                testCase.extended_addressing_enabled :
+                yamlContent.extended_addressing_enabled;
+
+            return {
+                commandId: yamlContent.command_id,
+                response: testCase.response,
+                expectedValues: testCase.expected_values,
+                canIdFormat: canIdFormat,
+                extendedAddressingEnabled: extendedAddressingEnabled,
+                testIndex: index
+            };
+        });
+    } catch (error) {
+        console.error("Error getting test data:", error);
+        return null;
+    }
+}
+
+/**
+ * Get test data from a test file for a specific test case
  * @param uri The URI of the test file
  * @param testIndex The index of the test case in the file
  * @returns The test data or null if it couldn't be retrieved

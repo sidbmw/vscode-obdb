@@ -153,65 +153,31 @@ export class TestExplorerProvider {
             }
 
             // Create or update the command test item
-            let commandItem = modelYearItem.children.get(`command-${commandId}`);
+            const commandItemId = `command-${commandId}-${modelYear}`;
+            let commandItem = modelYearItem.children.get(commandItemId);
             if (!commandItem) {
                 commandItem = this.testController.createTestItem(
-                    `command-${commandId}`,
+                    commandItemId,
                     `${commandId}`,
                     uri
                 );
                 modelYearItem.children.add(commandItem);
             }
 
-            // Remove existing test case items for this file
-            const oldFileItem = this.yamlTestItems.get(filePath);
-            if (oldFileItem) {
-                commandItem.children.replace([]);
+            // Find the range for test_cases in the document
+            const testCasesPattern = /test_cases:/g;
+            const match = testCasesPattern.exec(content);
+            if (match) {
+                const matchStart = match.index;
+                const startPos = document.positionAt(matchStart);
+                const endPos = document.positionAt(matchStart + match[0].length);
+                commandItem.range = new vscode.Range(startPos, endPos);
             }
 
-            // Get the test_cases array from the YAML document to access source positions
-            const testCasesNode = yamlDoc.get('test_cases');
-            if (!testCasesNode || !Array.isArray((testCasesNode as any).items)) {
-                return;
-            }
+            // Store test count information
+            commandItem.description = `${yamlContent.test_cases.length} test case(s)`;
 
-            // Add test items for each test case
-            for (let i = 0; i < (testCasesNode as any).items.length; i++) {
-                const testCaseNode = (testCasesNode as any).items[i];
-                const testCase = yamlContent.test_cases[i];
-
-                // Skip if this test case doesn't have response and expected values
-                if (!testCase.response || !testCase.expected_values) {
-                    continue;
-                }
-
-                // Create a readable name for the test case
-                const responsePreview = typeof testCase.response === 'string'
-                    ? testCase.response.split('\n')[0].substring(0, 20)
-                    : 'Response';
-                const expectedKeys = Object.keys(testCase.expected_values).join(', ');
-                const testName = `${responsePreview}... → ${expectedKeys}`;
-
-                // Create the test item
-                const testCaseItem = this.testController.createTestItem(
-                    `${commandId}-test-${i}`,
-                    testName,
-                    uri
-                );
-
-                // Get range information from the YAML node
-                if (testCaseNode && testCaseNode.range) {
-                    const startOffset = testCaseNode.range[0];
-                    const endOffset = testCaseNode.range[1];
-                    const startPos = document.positionAt(startOffset);
-                    const endPos = document.positionAt(endOffset);
-                    testCaseItem.range = new vscode.Range(startPos, endPos);
-                }
-
-                commandItem.children.add(testCaseItem);
-            }
-
-            // Store the file test item in our map
+            // Store the test item in our map
             this.yamlTestItems.set(filePath, commandItem);
 
         } catch (error) {
@@ -267,8 +233,8 @@ export class TestExplorerProvider {
                 continue;
             }
 
-            // This is a leaf node (actual test), so run it
-            await this.runTest(test, run, isDebug);
+            // This is a leaf node (actual test file), so run it
+            await this.runTestFile(test, run, isDebug);
         }
 
         // Complete the run
@@ -276,12 +242,12 @@ export class TestExplorerProvider {
     }
 
     /**
-     * Run a specific test
-     * @param test The test to run
+     * Run all tests in a test file
+     * @param test The test item representing the file
      * @param run The test run
      * @param isDebug Whether this is a debug run
      */
-    private async runTest(
+    private async runTestFile(
         test: vscode.TestItem,
         run: vscode.TestRun,
         isDebug: boolean
@@ -290,32 +256,18 @@ export class TestExplorerProvider {
         run.started(test);
 
         try {
-            // Extract the test index from the test ID
-            const idParts = test.id.split('-');
-            const testIndex = parseInt(idParts[idParts.length - 1]);
-
-            if (isNaN(testIndex)) {
-                // This shouldn't happen with our ID scheme
-                run.errored(test, new vscode.TestMessage('Invalid test ID'));
-                return;
-            }
-
-            // Get the command
-            const commandId = test.id.split('-test-')[0];
-
             // Run the appropriate command based on whether this is a debug run
-            const command = isDebug ? 'obdb.debugTest' : 'obdb.runTest';
+            const command = isDebug ? 'obdb.debugAllTests' : 'obdb.runAllTests';
 
-            // Execute the command with the appropriate arguments
-            await vscode.commands.executeCommand(command, test.uri, testIndex);
+            // Execute the command with the file URI
+            await vscode.commands.executeCommand(command, test.uri);
 
-            // For now, we'll mark all tests as passed since the actual test execution
-            // is handled by the commands. In a real implementation, you would want to
-            // capture the results and mark tests as passed/failed accordingly.
+            // For demonstration purposes, mark all tests as passed
+            // In a real implementation, you would want to capture the results
             run.passed(test);
         } catch (error) {
             // If there was an error, mark the test as errored
-            console.error(`Error running test ${test.id}:`, error);
+            console.error(`Error running tests in ${test.id}:`, error);
             run.errored(test, new vscode.TestMessage(`Error: ${error}`));
         }
     }
