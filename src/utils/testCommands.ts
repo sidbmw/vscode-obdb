@@ -40,11 +40,11 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
             }
 
             // Show a message indicating the test is running (placeholder)
-            vscode.window.showInformationMessage(
-                `Running test ${testIndex + 1} for command ${testData.commandId}:\n` +
-                `Response: ${testData.response.substring(0, 30)}${testData.response.length > 30 ? '...' : ''}\n` +
-                `Expected values: ${JSON.stringify(testData.expectedValues).substring(0, 50)}...`
-            );
+            // vscode.window.showInformationMessage(
+            //     `Running test ${testIndex + 1} for command ${testData.commandId}:\n` +
+            //     `Response: ${testData.response.substring(0, 30)}${testData.response.length > 30 ? '...' : ''}\n` +
+            //     `Expected values: ${JSON.stringify(testData.expectedValues).substring(0, 50)}...`
+            // );
 
             // In a real implementation, you would call your test runner here
         }

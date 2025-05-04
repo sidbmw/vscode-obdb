@@ -4,6 +4,7 @@ import { initializeVisualizationProvider } from './providers/visualizationProvid
 import { createDiagnosticsProvider } from './providers/diagnosticsProvider';
 import { createTestProvider } from './providers/testProvider';
 import { registerTestCommands } from './utils/testCommands';
+import { registerTestExplorer } from './providers/testExplorerProvider';
 
 /**
  * Extension activation
@@ -32,6 +33,10 @@ export function activate(context: vscode.ExtensionContext) {
   const testCommands = registerTestCommands(context);
   console.log('Registered commands for running and debugging tests');
 
+  // Register test explorer integration
+  const testExplorer = registerTestExplorer(context);
+  console.log('Registered test explorer integration');
+
   // Automatically show bitmap visualization when editing a JSON file
   const autoShowDisposable = vscode.window.onDidChangeActiveTextEditor(editor => {
     if (editor && editor.document.languageId === 'json') {
@@ -57,6 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
     diagnosticsProvider,
     testProvider,
     ...testCommands,
+    testExplorer,
     autoShowDisposable
   );
 }
