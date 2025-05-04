@@ -31,6 +31,7 @@ export const testExecutionEvent = new vscode.EventEmitter<{
     testIndex?: number;
     isDebug: boolean;
     errorMessage?: string;
+    errorLocation?: { file: string; line: number };
 }>();
 
 /**
@@ -73,7 +74,8 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
                     uri: uri,
                     success: result.success,
                     isDebug: false,
-                    errorMessage: result.errorMessage
+                    errorMessage: result.errorMessage,
+                    errorLocation: result.errorLocation
                 });
             } catch (error: unknown) {
                 console.error("Error running tests:", error);
@@ -186,7 +188,7 @@ async function findPythonExecutable(): Promise<string> {
  * @param debug Whether to run in debug mode
  * @returns Promise that resolves to an object with success status and error details
  */
-async function runPythonTests(uri: vscode.Uri, debug: boolean = false): Promise<{success: boolean, errorMessage?: string}> {
+async function runPythonTests(uri: vscode.Uri, debug: boolean = false): Promise<{success: boolean, errorMessage?: string, errorLocation?: { file: string; line: number }}> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) {
         throw new Error("No workspace folders found");
@@ -216,7 +218,7 @@ async function runPythonTests(uri: vscode.Uri, debug: boolean = false): Promise<
         throw new Error(`Could not find the run_tests.py script at ${runTestsScriptPath}`);
     }
 
-    return new Promise<{success: boolean, errorMessage?: string}>((resolve, reject) => {
+    return new Promise<{success: boolean, errorMessage?: string, errorLocation?: { file: string; line: number }}>((resolve, reject) => {
         // Use the run_tests.py script to run the test file
         const pythonArgs = [
             runTestsScriptPath,
@@ -258,6 +260,8 @@ async function runPythonTests(uri: vscode.Uri, debug: boolean = false): Promise<
 
                 // Format a detailed error message
                 let errorMessage = `Test execution failed with exit code ${code}`;
+                let errorLocation: { file: string; line: number } | undefined = undefined;
+
                 if (errorOutput) {
                     // Clean up error output for display
                     const formattedError = errorOutput.trim()
@@ -270,10 +274,20 @@ async function runPythonTests(uri: vscode.Uri, debug: boolean = false): Promise<
                         errorMessage = `AssertionError: ${assertionErrorMatch[1]}`;
                     }
 
+                    // Extract file path and line number from error message
+                    // Looking for patterns like "(defined in /path/to/file.yaml:7)"
+                    const locationMatch = errorOutput.match(/\(defined in ([^:]+):(\d+)\)/);
+                    if (locationMatch && locationMatch[1] && locationMatch[2]) {
+                        errorLocation = {
+                            file: locationMatch[1],
+                            line: parseInt(locationMatch[2], 10) - 1 // Convert to 0-based line number for VSCode
+                        };
+                    }
+
                     errorMessage = `${errorMessage}\n\n${formattedError}`;
                 }
 
-                resolve({ success: false, errorMessage });
+                resolve({ success: false, errorMessage, errorLocation });
             }
         });
 
