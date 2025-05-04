@@ -77,7 +77,7 @@ export function activate(context: vscode.ExtensionContext) {
     visualizationProvider,
     diagnosticsProvider,
     testProvider,
-    definitionProvider,
+    ...definitionProvider,
     ...testCommands,
     testExplorer,
     testExecutionSubscription,

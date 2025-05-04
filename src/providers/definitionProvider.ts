@@ -8,11 +8,17 @@ import * as jsonc from 'jsonc-parser';
  * Creates a definition provider for YAML files that enables Cmd+Click navigation
  * from command IDs to their signalset definitions
  */
-export function createDefinitionProvider(): vscode.Disposable {
-  return vscode.languages.registerDefinitionProvider(
-    { language: 'yaml' },
-    new CommandDefinitionProvider()
-  );
+export function createDefinitionProvider(): vscode.Disposable[] {
+  return [
+    vscode.languages.registerDefinitionProvider(
+      { language: 'yaml' },
+      new CommandDefinitionProvider()
+    ),
+    vscode.languages.registerDefinitionProvider(
+      { language: 'yaml' },
+      new SignalDefinitionProvider()
+    )
+  ];
 }
 
 /**
@@ -257,6 +263,276 @@ class CommandDefinitionProvider implements vscode.DefinitionProvider {
       }
     } catch (error) {
       console.error(`Error finding command position in ${signalsetPath}:`, error);
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Convert a character offset to a Position object
+   */
+  private getPositionFromOffset(text: string, offset: number): vscode.Position {
+    // Count newlines and character position
+    let line = 0;
+    let character = 0;
+    let currentOffset = 0;
+
+    const lines = text.split('\n');
+
+    for (let i = 0; i < lines.length; i++) {
+      const lineLength = lines[i].length;
+
+      // If the offset is within this line
+      if (currentOffset + lineLength >= offset) {
+        line = i;
+        character = offset - currentOffset;
+        break;
+      }
+
+      // Move to the next line (add 1 for the newline character)
+      currentOffset += lineLength + 1;
+    }
+
+    return new vscode.Position(line, character);
+  }
+}
+
+/**
+ * Definition provider that enables navigation from signal IDs to their definitions
+ * in signalset JSON files
+ */
+class SignalDefinitionProvider implements vscode.DefinitionProvider {
+  /**
+   * Provide the definition for a signal ID in YAML test case files
+   */
+  async provideDefinition(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    token: vscode.CancellationToken
+  ): Promise<vscode.Definition | undefined> {
+    try {
+      // Parse the YAML document to check if we're in the expected_values section
+      const text = document.getText();
+      const parsedYaml = yaml.load(text) as any;
+
+      if (!parsedYaml || !parsedYaml.test_cases) {
+        return undefined;
+      }
+
+      // Get the word at the current position
+      const wordRange = document.getWordRangeAtPosition(position);
+      if (!wordRange) {
+        return undefined;
+      }
+
+      const signalId = document.getText(wordRange);
+
+      // Check if the word is actually a signal ID in the expected_values section
+      const line = document.lineAt(position.line).text;
+      if (!this.isInExpectedValuesSection(text, position.line) || !line.trim().startsWith(signalId + ':')) {
+        return undefined;
+      }
+
+      // Extract model year from file path
+      const modelYear = this.getModelYearFromPath(document.uri.fsPath);
+      if (!modelYear) {
+        return undefined;
+      }
+
+      // Find the signalset definition for this signal ID
+      const definition = await this.findSignalDefinition(signalId, modelYear);
+      if (definition) {
+        return new vscode.Location(definition.uri, definition.range);
+      }
+    } catch (error) {
+      console.error(`Error finding signal definition:`, error);
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Check if the current line is within an expected_values section
+   */
+  private isInExpectedValuesSection(text: string, lineNumber: number): boolean {
+    const lines = text.split('\n');
+
+    // Walk backwards from the current line to find the start of the section
+    for (let i = lineNumber; i >= 0; i--) {
+      const line = lines[i].trim();
+
+      // If we hit a different section marker, we're not in expected_values
+      if (line === 'response:' || line === 'test_cases:' || line === 'command_id:') {
+        return false;
+      }
+
+      // Found the expected_values section
+      if (line === 'expected_values:') {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Extract the model year from the file path
+   */
+  private getModelYearFromPath(filePath: string): string | undefined {
+    // Try to match a year pattern in the path
+    const yearMatch = filePath.match(/\/(\d{4})\//);
+    if (yearMatch && yearMatch[1]) {
+      return yearMatch[1];
+    }
+    return undefined;
+  }
+
+  /**
+   * Find the signalset file and position that contains the definition for this signal ID
+   */
+  private async findSignalDefinition(
+    signalId: string,
+    modelYear: string
+  ): Promise<{ uri: vscode.Uri, range: vscode.Range } | undefined> {
+    try {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        return undefined;
+      }
+
+      const rootPath = workspaceFolders[0].uri.fsPath;
+
+      // Check the model year specific signalset file in v3 directory first
+      const potentialSignalsetPaths = [
+        // Check year range signalsets (e.g., 2015-2018.json)
+        ...await this.findYearRangeSignalsets(rootPath, parseInt(modelYear)),
+        // Fallback to default signalset
+        path.join(rootPath, 'signalsets', 'v3', 'default.json'),
+      ];
+
+      // Check each potential signalset file
+      for (const signalsetPath of potentialSignalsetPaths) {
+        if (fs.existsSync(signalsetPath)) {
+          // Check if the signal exists in this signalset and get its position
+          const position = await this.findSignalPositionInFile(signalsetPath, signalId);
+          if (position) {
+            return {
+              uri: vscode.Uri.file(signalsetPath),
+              range: position
+            };
+          }
+        }
+      }
+
+      // If not found in signalsets/v3, check example folders
+      const examplePaths = [
+        path.join(rootPath, 'examples', 'v3', 'default.json'),
+        path.join(rootPath, 'examples', 'v3', `${modelYear}.json`),
+        ...await this.findYearRangeSignalsets(path.join(rootPath, 'examples', 'v3'), parseInt(modelYear)),
+      ];
+
+      for (const examplePath of examplePaths) {
+        if (fs.existsSync(examplePath)) {
+          const position = await this.findSignalPositionInFile(examplePath, signalId);
+          if (position) {
+            return {
+              uri: vscode.Uri.file(examplePath),
+              range: position
+            };
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error finding signalset for signal:', error);
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Finds signalset files that contain year ranges including the target year
+   */
+  private async findYearRangeSignalsets(basePath: string, targetYear: number): Promise<string[]> {
+    try {
+      if (!fs.existsSync(basePath)) {
+        return [];
+      }
+
+      // Get all files in the directory
+      const files = await fs.promises.readdir(basePath);
+      const yearRangeSignalsets: string[] = [];
+
+      // Look for files with year range pattern (e.g., 2015-2018.json)
+      for (const file of files) {
+        const match = file.match(/^(\d{4})-(\d{4})\.json$/);
+        if (match) {
+          const startYear = parseInt(match[1]);
+          const endYear = parseInt(match[2]);
+
+          // Check if our target year is within this range
+          if (targetYear >= startYear && targetYear <= endYear) {
+            yearRangeSignalsets.push(path.join(basePath, file));
+          }
+        }
+      }
+
+      return yearRangeSignalsets;
+    } catch (error) {
+      console.error('Error finding year range signalsets:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Find the exact position of a signal in a signalset file
+   */
+  private async findSignalPositionInFile(
+    signalsetPath: string,
+    signalId: string
+  ): Promise<vscode.Range | undefined> {
+    try {
+      const content = await fs.promises.readFile(signalsetPath, 'utf-8');
+
+      // Parse the JSON to get the AST
+      const rootNode = jsonc.parseTree(content);
+      if (!rootNode) {
+        return undefined;
+      }
+
+      // Find the commands array node
+      const commandsNode = jsonc.findNodeAtLocation(rootNode, ['commands']);
+      if (!commandsNode || !commandsNode.children) {
+        return undefined;
+      }
+
+      // Iterate through the commands array to find the signal
+      for (const commandNode of commandsNode.children) {
+        // Find the signals array in this command
+        const signalsNode = jsonc.findNodeAtLocation(commandNode, ['signals']);
+        if (!signalsNode || !signalsNode.children) {
+          continue;
+        }
+
+        // Check each signal in the array
+        for (const signalNode of signalsNode.children) {
+          // Get the signal ID
+          const idNode = jsonc.findNodeAtLocation(signalNode, ['id']);
+          if (!idNode) {
+            continue;
+          }
+
+          const id = jsonc.getNodeValue(idNode);
+          if (id === signalId) {
+            // Return the range of the entire signal object
+            return new vscode.Range(
+              this.getPositionFromOffset(content, signalNode.offset),
+              this.getPositionFromOffset(content, signalNode.offset + signalNode.length)
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error finding signal position in ${signalsetPath}:`, error);
     }
 
     return undefined;
