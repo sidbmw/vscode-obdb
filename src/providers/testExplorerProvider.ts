@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as YAML from 'yaml';
 import * as fs from 'fs';
+import { testExecutionEvent } from '../utils/testCommands';
 
 /**
  * A class that manages test items in the VS Code Test Explorer
@@ -11,6 +12,7 @@ export class TestExplorerProvider {
     private fileWatcher: vscode.FileSystemWatcher;
     private yamlTestItems: Map<string, vscode.TestItem> = new Map();
     private disposables: vscode.Disposable[] = [];
+    private activeRuns: Map<string, vscode.TestRun> = new Map();
 
     /**
      * Creates a new TestExplorerProvider
@@ -44,6 +46,9 @@ export class TestExplorerProvider {
         this.fileWatcher.onDidCreate(uri => this.onYamlFileChanged(uri));
         this.fileWatcher.onDidChange(uri => this.onYamlFileChanged(uri));
         this.fileWatcher.onDidDelete(uri => this.onYamlFileDeleted(uri));
+
+        // Subscribe to test execution events from CodeLens actions
+        this.disposables.push(testExecutionEvent.event(this.handleTestExecutionEvent.bind(this)));
 
         // Initial load of test items
         this.loadAllTestFiles();
@@ -194,6 +199,55 @@ export class TestExplorerProvider {
         const normalizedPath = filePath.replace(/\\/g, '/');
         // Match paths like test_cases/{model_year}/commands/{test_case}.yaml
         return /test_cases\/\d+\/commands\/[^\/]+\.ya?ml$/i.test(normalizedPath);
+    }
+
+    /**
+     * Handles test execution events from CodeLens actions
+     * @param event The test execution event
+     */
+    private handleTestExecutionEvent(event: {
+        uri: vscode.Uri;
+        success: boolean;
+        testIndex?: number;
+        isDebug: boolean;
+    }) {
+        const filePath = event.uri.fsPath;
+        const testItem = this.yamlTestItems.get(filePath);
+
+        if (!testItem) {
+            // Test item not found, possibly not loaded yet
+            return;
+        }
+
+        // Create a test run that matches what the user would see in the Test Explorer
+        const kind = event.isDebug ? vscode.TestRunProfileKind.Debug : vscode.TestRunProfileKind.Run;
+        const runId = `${filePath}-${kind}-${Date.now()}`;
+
+        // Check if there's an existing run for this file and kind
+        let run = this.activeRuns.get(runId);
+
+        if (!run) {
+            // Create a new run with just this test
+            const request = new vscode.TestRunRequest([testItem]);
+            run = this.testController.createTestRun(request, runId);
+            this.activeRuns.set(runId, run);
+        }
+
+        // Mark test as running
+        run.started(testItem);
+
+        // Update test state based on execution result
+        if (event.success) {
+            run.passed(testItem);
+        } else {
+            run.failed(testItem, new vscode.TestMessage('Test execution failed'));
+        }
+
+        // Complete the run after a brief delay
+        setTimeout(() => {
+            run?.end();
+            this.activeRuns.delete(runId);
+        }, 500);
     }
 
     /**

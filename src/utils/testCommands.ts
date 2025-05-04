@@ -22,6 +22,14 @@ interface TestFile {
     test_cases: TestCase[];
 }
 
+// Event emitter to notify when test execution occurs via CodeLens
+export const testExecutionEvent = new vscode.EventEmitter<{
+    uri: vscode.Uri;
+    success: boolean;
+    testIndex?: number;
+    isDebug: boolean;
+}>();
+
 /**
  * Register test commands for running and debugging tests
  * @param context The extension context
@@ -36,6 +44,14 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
             const testData = await getAllTestData(uri);
             if (!testData || testData.length === 0) {
                 vscode.window.showErrorMessage('Failed to get test data or no tests found');
+
+                // Notify test execution event with failure
+                testExecutionEvent.fire({
+                    uri: uri,
+                    success: false,
+                    isDebug: false
+                });
+
                 return;
             }
 
@@ -45,11 +61,18 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
             );
 
             // In a real implementation, you would call your test runner here
-            // For demonstration, just show success message
+            // For demonstration, simulate success after a brief delay
             setTimeout(() => {
                 vscode.window.showInformationMessage(
                     `Successfully ran ${testData.length} tests for command ${testData[0].commandId}`
                 );
+
+                // Notify test execution event with success
+                testExecutionEvent.fire({
+                    uri: uri,
+                    success: true,
+                    isDebug: false
+                });
             }, 1000);
         }
     );
@@ -62,6 +85,14 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
             const testData = await getAllTestData(uri);
             if (!testData || testData.length === 0) {
                 vscode.window.showErrorMessage('Failed to get test data or no tests found');
+
+                // Notify test execution event with failure
+                testExecutionEvent.fire({
+                    uri: uri,
+                    success: false,
+                    isDebug: true
+                });
+
                 return;
             }
 
@@ -71,11 +102,18 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
             );
 
             // In a real implementation, you would configure and start the debugger here
-            // For demonstration, just show success message
+            // For demonstration, simulate success after a brief delay
             setTimeout(() => {
                 vscode.window.showInformationMessage(
                     `Debug session started for ${testData.length} tests on command ${testData[0].commandId}`
                 );
+
+                // Notify test execution event with success
+                testExecutionEvent.fire({
+                    uri: uri,
+                    success: true,
+                    isDebug: true
+                });
             }, 1000);
         }
     );
@@ -88,6 +126,15 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
             const testData = await getTestData(uri, testIndex);
             if (!testData) {
                 vscode.window.showErrorMessage('Failed to get test data');
+
+                // Notify test execution event with failure
+                testExecutionEvent.fire({
+                    uri: uri,
+                    success: false,
+                    testIndex: testIndex,
+                    isDebug: false
+                });
+
                 return;
             }
 
@@ -97,6 +144,16 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
             );
 
             // In a real implementation, you would call your test runner here
+            // For demonstration, simulate success after a brief delay
+            setTimeout(() => {
+                // Notify test execution event with success
+                testExecutionEvent.fire({
+                    uri: uri,
+                    success: true,
+                    testIndex: testIndex,
+                    isDebug: false
+                });
+            }, 500);
         }
     );
 
@@ -108,6 +165,15 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
             const testData = await getTestData(uri, testIndex);
             if (!testData) {
                 vscode.window.showErrorMessage('Failed to get test data');
+
+                // Notify test execution event with failure
+                testExecutionEvent.fire({
+                    uri: uri,
+                    success: false,
+                    testIndex: testIndex,
+                    isDebug: true
+                });
+
                 return;
             }
 
@@ -117,6 +183,16 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
             );
 
             // In a real implementation, you would configure and start the debugger here
+            // For demonstration, simulate success after a brief delay
+            setTimeout(() => {
+                // Notify test execution event with success
+                testExecutionEvent.fire({
+                    uri: uri,
+                    success: true,
+                    testIndex: testIndex,
+                    isDebug: true
+                });
+            }, 500);
         }
     );
 
