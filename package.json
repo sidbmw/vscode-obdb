@@ -16,7 +16,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:json"
+    "onLanguage:json",
+    "onLanguage:yaml"
   ],
   "main": "./dist/extension.js",
   "scripts": {
@@ -36,6 +37,16 @@
         "command": "obdb.showBitmapVisualization",
         "title": "Show Bitmap Visualization",
         "category": "OBDb"
+      },
+      {
+        "command": "obdb.runTest",
+        "title": "Run Test",
+        "category": "OBDb"
+      },
+      {
+        "command": "obdb.debugTest",
+        "title": "Debug Test",
+        "category": "OBDb"
       }
     ],
     "keybindings": [
@@ -51,6 +62,13 @@
         "id": "json",
         "extensions": [
           ".json"
+        ]
+      },
+      {
+        "id": "yaml",
+        "extensions": [
+          ".yaml",
+          ".yml"
         ]
       }
     ],

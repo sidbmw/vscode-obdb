@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { createHoverProvider } from './providers/hoverProvider';
 import { initializeVisualizationProvider } from './providers/visualizationProvider';
 import { createDiagnosticsProvider } from './providers/diagnosticsProvider';
+import { createTestProvider } from './providers/testProvider';
+import { registerTestCommands } from './utils/testCommands';
 
 /**
  * Extension activation
@@ -21,6 +23,14 @@ export function activate(context: vscode.ExtensionContext) {
   // Register the diagnostics provider for command validation
   const diagnosticsProvider = createDiagnosticsProvider();
   console.log('Registered diagnostics provider for command validation');
+
+  // Register the test provider for YAML test files
+  const testProvider = createTestProvider();
+  console.log('Registered test provider for YAML test files');
+
+  // Register test commands for running and debugging tests
+  const testCommands = registerTestCommands(context);
+  console.log('Registered commands for running and debugging tests');
 
   // Automatically show bitmap visualization when editing a JSON file
   const autoShowDisposable = vscode.window.onDidChangeActiveTextEditor(editor => {
@@ -45,6 +55,8 @@ export function activate(context: vscode.ExtensionContext) {
     hoverProvider,
     visualizationProvider,
     diagnosticsProvider,
+    testProvider,
+    ...testCommands,
     autoShowDisposable
   );
 }
