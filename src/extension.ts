@@ -5,6 +5,7 @@ import { createDiagnosticsProvider } from './providers/diagnosticsProvider';
 import { createTestProvider } from './providers/testProvider';
 import { registerTestCommands, testExecutionEvent } from './utils/testCommands';
 import { registerTestExplorer } from './providers/testExplorerProvider';
+import { createDefinitionProvider } from './providers/definitionProvider';
 
 // Create a diagnostic collection for test failures
 let testDiagnosticCollection: vscode.DiagnosticCollection;
@@ -34,6 +35,10 @@ export function activate(context: vscode.ExtensionContext) {
   // Register the test provider for YAML test files
   const testProvider = createTestProvider();
   console.log('Registered test provider for YAML test files');
+
+  // Register the definition provider for command ID navigation in YAML files
+  const definitionProvider = createDefinitionProvider();
+  console.log('Registered definition provider for command ID navigation');
 
   // Register test commands for running and debugging tests
   const testCommands = registerTestCommands(context);
@@ -72,6 +77,7 @@ export function activate(context: vscode.ExtensionContext) {
     visualizationProvider,
     diagnosticsProvider,
     testProvider,
+    definitionProvider,
     ...testCommands,
     testExplorer,
     testExecutionSubscription,
