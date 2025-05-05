@@ -6,6 +6,7 @@ import { getCachedImage, cacheImage } from '../utils/cache';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { groupModelYearsByGeneration } from '../utils/generations';
 
 /**
  * Creates a hover provider for JSON files
@@ -36,11 +37,21 @@ export function createHoverProvider(): vscode.Disposable {
           const modelYears = await getModelYearsForSignalId(word);
 
           if (modelYears.length > 0) {
-            // Sort years numerically
-            modelYears.sort((a, b) => parseInt(a) - parseInt(b));
+            // Add the signal ID title
+            markdownContent.appendMarkdown(`## ${word}\n\n`);
 
-            // Add supported model years at the top
-            markdownContent.appendMarkdown(`**Supported in model years:** ${modelYears.join(', ')}\n\n`);
+            // Group model years by generation
+            const groupedYears = await groupModelYearsByGeneration(modelYears);
+
+            // Display years grouped by generation
+            markdownContent.appendMarkdown(`### Supported Model Years\n\n`);
+
+            for (const [generationName, years] of Object.entries(groupedYears)) {
+              // Sort years numerically within each generation
+              years.sort((a, b) => parseInt(a) - parseInt(b));
+
+              markdownContent.appendMarkdown(`- **${generationName}:** ${years.join(', ')}\n\n`);
+            }
           } else {
             // Add the signal ID title even if no model years are found
             markdownContent.appendMarkdown(`## ${word}\n\n`);
@@ -94,20 +105,30 @@ export function createHoverProvider(): vscode.Disposable {
           }
 
           if (commandId) {
+            // First display command ID
+            markdownContent.appendMarkdown(`## Command: \`${commandId}\`\n\n`);
+
             // Get unsupported model years for this command
             const unsupportedYears = await getUnsupportedModelYearsForCommand(commandId);
 
             if (unsupportedYears.length > 0) {
-              // Sort years numerically
-              unsupportedYears.sort((a, b) => parseInt(a) - parseInt(b));
+              // Group unsupported years by generation
+              const groupedUnsupportedYears = await groupModelYearsByGeneration(unsupportedYears);
 
-              // First display command ID
-              markdownContent.appendMarkdown(`**Command ID:** \`${commandId}\`\n\n`);
+              // Display unsupported years grouped by generation
+              markdownContent.appendMarkdown(`### Unsupported Model Years\n\n`);
 
-              // Add unsupported model years information
-              markdownContent.appendMarkdown(`**Unsupported in model years:** ${unsupportedYears.join(', ')}\n\n`);
+              for (const [generationName, years] of Object.entries(groupedUnsupportedYears)) {
+                // Sort years numerically within each generation
+                years.sort((a, b) => parseInt(a) - parseInt(b));
+
+                markdownContent.appendMarkdown(`- **${generationName}:** ${years.join(', ')}\n\n`);
+              }
 
               // Return the hover for command definition
+              return new vscode.Hover(markdownContent);
+            } else {
+              markdownContent.appendMarkdown(`No compatibility issues found.\n\n`);
               return new vscode.Hover(markdownContent);
             }
           }

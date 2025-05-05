@@ -3,23 +3,11 @@ import * as path from 'path';
 import * as YAML from 'yaml';
 import * as fs from 'fs';
 import { testExecutionEvent } from '../utils/testCommands';
-
-/**
- * Interface for a generation in the generations.yaml file
- */
-interface Generation {
-    name: string;
-    start_year: number;
-    end_year: number | null;
-    description: string;
-}
-
-/**
- * Interface for the generations.yaml file content
- */
-interface GenerationsConfig {
-    generations: Generation[];
-}
+import {
+    Generation,
+    getGenerations,
+    getGenerationForModelYear
+} from '../utils/generations';
 
 /**
  * A class that manages test items in the VS Code Test Explorer
@@ -30,7 +18,6 @@ export class TestExplorerProvider {
     private yamlTestItems: Map<string, vscode.TestItem> = new Map();
     private disposables: vscode.Disposable[] = [];
     private activeRuns: Map<string, vscode.TestRun> = new Map();
-    private generations: Generation[] | null = null;
     private generationsFileWatcher: vscode.FileSystemWatcher | null = null;
 
     /**
@@ -69,9 +56,6 @@ export class TestExplorerProvider {
         // Subscribe to test execution events from CodeLens actions
         this.disposables.push(testExecutionEvent.event(this.handleTestExecutionEvent.bind(this)));
 
-        // Load generations file if it exists
-        this.loadGenerationsFile();
-
         // Create a file watcher for the generations.yaml file
         if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
             const generationsPattern = new vscode.RelativePattern(
@@ -83,13 +67,12 @@ export class TestExplorerProvider {
 
             // Reload generations and refresh tests when the file changes
             this.generationsFileWatcher.onDidChange(() => {
-                this.loadGenerationsFile().then(() => this.rebuildTestHierarchy());
+                this.rebuildTestHierarchy();
             });
             this.generationsFileWatcher.onDidCreate(() => {
-                this.loadGenerationsFile().then(() => this.rebuildTestHierarchy());
+                this.rebuildTestHierarchy();
             });
             this.generationsFileWatcher.onDidDelete(() => {
-                this.generations = null;
                 this.rebuildTestHierarchy();
             });
         }
@@ -109,41 +92,6 @@ export class TestExplorerProvider {
     }
 
     /**
-     * Loads the generations configuration file if it exists
-     */
-    private async loadGenerationsFile(): Promise<void> {
-        if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
-            this.generations = null;
-            return;
-        }
-
-        try {
-            const rootFolder = vscode.workspace.workspaceFolders[0];
-            const generationsFilePath = path.join(rootFolder.uri.fsPath, 'generations.yaml');
-
-            // Check if the file exists
-            if (!fs.existsSync(generationsFilePath)) {
-                this.generations = null;
-                return;
-            }
-
-            // Read and parse the generations file
-            const fileContent = fs.readFileSync(generationsFilePath, 'utf8');
-            const generationsConfig = YAML.parse(fileContent) as GenerationsConfig;
-
-            if (generationsConfig && Array.isArray(generationsConfig.generations)) {
-                this.generations = generationsConfig.generations;
-                console.log(`Loaded ${this.generations.length} generations from generations.yaml`);
-            } else {
-                this.generations = null;
-            }
-        } catch (error) {
-            console.error("Error loading generations file:", error);
-            this.generations = null;
-        }
-    }
-
-    /**
      * Rebuilds the test hierarchy based on the current generations configuration
      */
     private rebuildTestHierarchy(): void {
@@ -153,28 +101,6 @@ export class TestExplorerProvider {
 
         // Reload all test files with the new structure
         this.loadAllTestFiles();
-    }
-
-    /**
-     * Gets the generation for a specific model year
-     * @param modelYear The model year to find the generation for
-     * @returns The generation that includes this model year, or null if none found
-     */
-    private getGenerationForModelYear(modelYear: string): Generation | null {
-        if (!this.generations || !Array.isArray(this.generations)) {
-            return null;
-        }
-
-        const year = parseInt(modelYear, 10);
-        if (isNaN(year)) {
-            return null;
-        }
-
-        // Find the generation that includes this model year
-        return this.generations.find(gen =>
-            year >= gen.start_year &&
-            (gen.end_year === null || year <= gen.end_year)
-        ) || null;
     }
 
     /**
@@ -296,7 +222,7 @@ export class TestExplorerProvider {
             const commandId = yamlContent.command_id || path.basename(filePath, path.extname(filePath));
 
             // Check if this model year belongs to a generation
-            const generation = this.getGenerationForModelYear(modelYear);
+            const generation = await getGenerationForModelYear(modelYear);
 
             // Create or update items based on whether we have a generation
             if (generation) {
