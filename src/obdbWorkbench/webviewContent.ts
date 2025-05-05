@@ -327,13 +327,13 @@ export function getWebviewContent(
     'const legendItems = document.querySelectorAll(".legend-item");' +
     'const numericRadio = document.getElementById("numeric-format");' +
     'const alphabeticRadio = document.getElementById("alphabetic-format");' +
-    
+
     // Initialize all bit cells to always use numeric format
     'const bitCells = document.querySelectorAll(".bit-cell");' +
     'bitCells.forEach(cell => {' +
     'cell.textContent = cell.getAttribute("data-numeric");' +
     '});' +
-    
+
     'if (numericRadio && alphabeticRadio) {' +
     'numericRadio.addEventListener("change", () => {' +
     'if (numericRadio.checked) {' +
@@ -345,10 +345,10 @@ export function getWebviewContent(
     'updateIndexFormat("alphabetic");' +
     '}' +
     '});' +
-    
+
     // Apply the currently selected format on page load
     'if (alphabeticRadio.checked) {' +
-    'updateIndexFormat("alphabetic");' + 
+    'updateIndexFormat("alphabetic");' +
     '} else {' +
     'updateIndexFormat("numeric");' +
     '}' +
