@@ -5,6 +5,23 @@ import * as fs from 'fs';
 import { testExecutionEvent } from '../utils/testCommands';
 
 /**
+ * Interface for a generation in the generations.yaml file
+ */
+interface Generation {
+    name: string;
+    start_year: number;
+    end_year: number | null;
+    description: string;
+}
+
+/**
+ * Interface for the generations.yaml file content
+ */
+interface GenerationsConfig {
+    generations: Generation[];
+}
+
+/**
  * A class that manages test items in the VS Code Test Explorer
  */
 export class TestExplorerProvider {
@@ -13,6 +30,8 @@ export class TestExplorerProvider {
     private yamlTestItems: Map<string, vscode.TestItem> = new Map();
     private disposables: vscode.Disposable[] = [];
     private activeRuns: Map<string, vscode.TestRun> = new Map();
+    private generations: Generation[] | null = null;
+    private generationsFileWatcher: vscode.FileSystemWatcher | null = null;
 
     /**
      * Creates a new TestExplorerProvider
@@ -50,6 +69,31 @@ export class TestExplorerProvider {
         // Subscribe to test execution events from CodeLens actions
         this.disposables.push(testExecutionEvent.event(this.handleTestExecutionEvent.bind(this)));
 
+        // Load generations file if it exists
+        this.loadGenerationsFile();
+
+        // Create a file watcher for the generations.yaml file
+        if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+            const generationsPattern = new vscode.RelativePattern(
+                vscode.workspace.workspaceFolders[0],
+                'generations.yaml'
+            );
+            this.generationsFileWatcher = vscode.workspace.createFileSystemWatcher(generationsPattern);
+            this.disposables.push(this.generationsFileWatcher);
+
+            // Reload generations and refresh tests when the file changes
+            this.generationsFileWatcher.onDidChange(() => {
+                this.loadGenerationsFile().then(() => this.rebuildTestHierarchy());
+            });
+            this.generationsFileWatcher.onDidCreate(() => {
+                this.loadGenerationsFile().then(() => this.rebuildTestHierarchy());
+            });
+            this.generationsFileWatcher.onDidDelete(() => {
+                this.generations = null;
+                this.rebuildTestHierarchy();
+            });
+        }
+
         // Initial load of test items
         this.loadAllTestFiles();
     }
@@ -62,6 +106,75 @@ export class TestExplorerProvider {
             disposable.dispose();
         }
         this.disposables = [];
+    }
+
+    /**
+     * Loads the generations configuration file if it exists
+     */
+    private async loadGenerationsFile(): Promise<void> {
+        if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+            this.generations = null;
+            return;
+        }
+
+        try {
+            const rootFolder = vscode.workspace.workspaceFolders[0];
+            const generationsFilePath = path.join(rootFolder.uri.fsPath, 'generations.yaml');
+
+            // Check if the file exists
+            if (!fs.existsSync(generationsFilePath)) {
+                this.generations = null;
+                return;
+            }
+
+            // Read and parse the generations file
+            const fileContent = fs.readFileSync(generationsFilePath, 'utf8');
+            const generationsConfig = YAML.parse(fileContent) as GenerationsConfig;
+
+            if (generationsConfig && Array.isArray(generationsConfig.generations)) {
+                this.generations = generationsConfig.generations;
+                console.log(`Loaded ${this.generations.length} generations from generations.yaml`);
+            } else {
+                this.generations = null;
+            }
+        } catch (error) {
+            console.error("Error loading generations file:", error);
+            this.generations = null;
+        }
+    }
+
+    /**
+     * Rebuilds the test hierarchy based on the current generations configuration
+     */
+    private rebuildTestHierarchy(): void {
+        // Clear existing test items
+        this.testController.items.replace([]);
+        this.yamlTestItems.clear();
+
+        // Reload all test files with the new structure
+        this.loadAllTestFiles();
+    }
+
+    /**
+     * Gets the generation for a specific model year
+     * @param modelYear The model year to find the generation for
+     * @returns The generation that includes this model year, or null if none found
+     */
+    private getGenerationForModelYear(modelYear: string): Generation | null {
+        if (!this.generations || !Array.isArray(this.generations)) {
+            return null;
+        }
+
+        const year = parseInt(modelYear, 10);
+        if (isNaN(year)) {
+            return null;
+        }
+
+        // Find the generation that includes this model year
+        return this.generations.find(gen =>
+            year >= gen.start_year &&
+            (gen.end_year === null || year <= gen.end_year)
+        ) || null;
     }
 
     /**
@@ -107,7 +220,43 @@ export class TestExplorerProvider {
         const fileTestItem = this.yamlTestItems.get(filePath);
 
         if (fileTestItem) {
-            this.testController.items.delete(fileTestItem.id);
+            // Find the parent item and remove the test from it
+            // Iterate through all top-level items
+            const topLevelItemsArray = [...this.testController.items];
+
+            for (const [topItemId, topItem] of topLevelItemsArray) {
+                let found = false;
+
+                // Check if it's directly in a model year item
+                if (topItem.children.get(fileTestItem.id)) {
+                    topItem.children.delete(fileTestItem.id);
+                    found = true;
+                } else {
+                    // Check in generation > model year hierarchy
+                    // Convert children to array we can iterate
+                    const yearItemsArray = [...topItem.children];
+
+                    for (const [yearItemId, yearItem] of yearItemsArray) {
+                        if (yearItem.children.get(fileTestItem.id)) {
+                            yearItem.children.delete(fileTestItem.id);
+
+                            // If model year is now empty, remove it too
+                            if (yearItem.children.size === 0) {
+                                topItem.children.delete(yearItemId);
+                            }
+
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+
+                // If the top-level item is now empty, remove it
+                if (found && topItem.children.size === 0) {
+                    this.testController.items.delete(topItemId);
+                }
+            }
+
             this.yamlTestItems.delete(filePath);
         }
     }
@@ -146,28 +295,134 @@ export class TestExplorerProvider {
             // Get command ID
             const commandId = yamlContent.command_id || path.basename(filePath, path.extname(filePath));
 
-            // Create or update the model year test item
-            let modelYearItem = this.testController.items.get(`model-year-${modelYear}`);
-            if (!modelYearItem) {
-                modelYearItem = this.testController.createTestItem(
-                    `model-year-${modelYear}`,
-                    `Model Year ${modelYear}`,
-                    vscode.Uri.file(path.dirname(path.dirname(filePath)))
-                );
-                this.testController.items.add(modelYearItem);
+            // Check if this model year belongs to a generation
+            const generation = this.getGenerationForModelYear(modelYear);
+
+            // Create or update items based on whether we have a generation
+            if (generation) {
+                // We have a generation - use a generation > model year > command hierarchy
+                this.addTestWithGenerationHierarchy(uri, filePath, modelYear, commandId, yamlContent, generation);
+            } else {
+                // No generation - use a model year > command hierarchy
+                this.addTestWithModelYearHierarchy(uri, filePath, modelYear, commandId, yamlContent);
             }
 
-            // Create or update the command test item
-            const commandItemId = `command-${commandId}-${modelYear}`;
-            let commandItem = modelYearItem.children.get(commandItemId);
-            if (!commandItem) {
-                commandItem = this.testController.createTestItem(
-                    commandItemId,
-                    `${commandId}`,
-                    uri
-                );
-                modelYearItem.children.add(commandItem);
-            }
+        } catch (error) {
+            console.error("Error adding test items from file:", error);
+        }
+    }
+
+    /**
+     * Adds a test using the generation > model year > command hierarchy
+     */
+    private addTestWithGenerationHierarchy(
+        uri: vscode.Uri,
+        filePath: string,
+        modelYear: string,
+        commandId: string,
+        yamlContent: any,
+        generation: Generation
+    ) {
+        // Create or get the generation item
+        const generationItemId = `generation-${generation.start_year}-${generation.end_year || 'present'}`;
+        let generationItem = this.testController.items.get(generationItemId);
+
+        if (!generationItem) {
+            const endYearText = generation.end_year ? generation.end_year.toString() : 'Present';
+            generationItem = this.testController.createTestItem(
+                generationItemId,
+                generation.name,
+                uri
+            );
+            generationItem.description = `${generation.start_year}-${endYearText}`;
+            this.testController.items.add(generationItem);
+        }
+
+        // Create or get the model year item under the generation
+        const modelYearItemId = `model-year-${modelYear}`;
+        let modelYearItem = generationItem.children.get(modelYearItemId);
+
+        if (!modelYearItem) {
+            modelYearItem = this.testController.createTestItem(
+                modelYearItemId,
+                `Model Year ${modelYear}`,
+                uri
+            );
+            generationItem.children.add(modelYearItem);
+        }
+
+        // Create or update the command test item
+        const commandItemId = `command-${commandId}-${modelYear}`;
+        let commandItem = modelYearItem.children.get(commandItemId);
+
+        if (!commandItem) {
+            commandItem = this.testController.createTestItem(
+                commandItemId,
+                `${commandId}`,
+                uri
+            );
+            modelYearItem.children.add(commandItem);
+        }
+
+        // Find the range for test_cases in the document
+        this.updateCommandItemWithTestCases(uri, commandItem, yamlContent);
+
+        // Store the test item in our map
+        this.yamlTestItems.set(filePath, commandItem);
+    }
+
+    /**
+     * Adds a test using the model year > command hierarchy (when no generations are defined)
+     */
+    private addTestWithModelYearHierarchy(
+        uri: vscode.Uri,
+        filePath: string,
+        modelYear: string,
+        commandId: string,
+        yamlContent: any
+    ) {
+        // Create or update the model year test item
+        let modelYearItem = this.testController.items.get(`model-year-${modelYear}`);
+        if (!modelYearItem) {
+            modelYearItem = this.testController.createTestItem(
+                `model-year-${modelYear}`,
+                `Model Year ${modelYear}`,
+                vscode.Uri.file(path.dirname(path.dirname(filePath)))
+            );
+            this.testController.items.add(modelYearItem);
+        }
+
+        // Create or update the command test item
+        const commandItemId = `command-${commandId}-${modelYear}`;
+        let commandItem = modelYearItem.children.get(commandItemId);
+        if (!commandItem) {
+            commandItem = this.testController.createTestItem(
+                commandItemId,
+                `${commandId}`,
+                uri
+            );
+            modelYearItem.children.add(commandItem);
+        }
+
+        // Update command item with test cases information
+        this.updateCommandItemWithTestCases(uri, commandItem, yamlContent);
+
+        // Store the test item in our map
+        this.yamlTestItems.set(filePath, commandItem);
+    }
+
+    /**
+     * Updates a command test item with test cases information
+     */
+    private async updateCommandItemWithTestCases(
+        uri: vscode.Uri,
+        commandItem: vscode.TestItem,
+        yamlContent: any
+    ) {
+        try {
+            // Read the document to find positions
+            const document = await vscode.workspace.openTextDocument(uri);
+            const content = document.getText();
 
             // Find the range for test_cases in the document
             const testCasesPattern = /test_cases:/g;
@@ -180,13 +435,11 @@ export class TestExplorerProvider {
             }
 
             // Store test count information
-            commandItem.description = `${yamlContent.test_cases.length} test case(s)`;
-
-            // Store the test item in our map
-            this.yamlTestItems.set(filePath, commandItem);
-
+            if (yamlContent.test_cases && Array.isArray(yamlContent.test_cases)) {
+                commandItem.description = `${yamlContent.test_cases.length} test case(s)`;
+            }
         } catch (error) {
-            console.error("Error adding test items from file:", error);
+            console.error("Error updating command item with test cases:", error);
         }
     }
 
