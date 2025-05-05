@@ -15,6 +15,7 @@ export interface Command {
   name?: string;
   hdr?: string;
   cmd?: any;
+  rax?: string;  // Response address extension
   description?: string;
   parameters?: any[];
   signals?: any[];
