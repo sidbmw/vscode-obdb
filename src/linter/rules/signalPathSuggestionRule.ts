@@ -72,20 +72,7 @@ export class SignalPathSuggestionRule implements ILinterRule {
       'HOOD': 'Doors',
       'WINDOW': 'Windows',
 
-      // Climate related
-      'TEMP': 'Climate',
-      'TEMPERATURE': 'Climate',
-      'CLIMATE': 'Climate',
-      'AC': 'Climate',
-      'DEFOG': 'Climate',
-      'DEFROST': 'Climate',
-
-      // Engine related
-      'ENGINE': 'Engine',
-      'RPM': 'Engine',
-
       // Transmission related
-      'TRANS': 'Transmission',
       'GEAR': 'Transmission',
 
       // Chassis related
@@ -96,13 +83,9 @@ export class SignalPathSuggestionRule implements ILinterRule {
       'BELT': 'Seatbelts',
       'SEATBELT': 'Seatbelts',
 
-      // Battery related
-      'BATTERY': 'Electrical',
-      'VOLTAGE': 'Electrical',
-
-      // Fuel related
-      'FUEL': 'Fuel',
-      'GAS': 'Fuel'
+      // Tire related
+      '_TP_': 'Tires',
+      '_TT_': 'Tires',
     };
 
     // Check the ID against our pattern mappings
