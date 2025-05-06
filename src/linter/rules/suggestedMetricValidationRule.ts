@@ -62,7 +62,7 @@ export class SuggestedMetricValidationRule implements ILinterRule {
       case 'fuelTankLevel':
       case 'stateOfCharge':
       case 'stateOfHealth':
-        expectedUnitGroup = ['percent'];
+        expectedUnitGroup = ['percent', 'liters', 'gallons'];
         break;
       case 'isCharging':
       case 'pluggedIn':
