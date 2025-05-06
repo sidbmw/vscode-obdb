@@ -31,12 +31,12 @@ const CACHE_EXPIRY_MS = 30000; // 30 seconds
  */
 export async function getGenerations(): Promise<Generation[] | null> {
     const now = Date.now();
-    
+
     // Return cached value if it's fresh
     if (cachedGenerations !== null && (now - lastGenerationsRead) < CACHE_EXPIRY_MS) {
         return cachedGenerations;
     }
-    
+
     // Otherwise reload from file
     if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
         cachedGenerations = null;
@@ -79,7 +79,7 @@ export async function getGenerations(): Promise<Generation[] | null> {
  */
 export async function getGenerationForModelYear(modelYear: string): Promise<Generation | null> {
     const generations = await getGenerations();
-    
+
     if (!generations || !Array.isArray(generations)) {
         return null;
     }
@@ -103,25 +103,25 @@ export async function getGenerationForModelYear(modelYear: string): Promise<Gene
  */
 export async function groupModelYearsByGeneration(modelYears: string[]): Promise<Record<string, string[]>> {
     const generations = await getGenerations();
-    
+
     if (!generations || !Array.isArray(generations)) {
         // If no generations are defined, return a single group for all years
         return { 'All Years': modelYears };
     }
-    
+
     const result: Record<string, string[]> = {};
     const ungroupedYears: string[] = [];
-    
+
     // Try to assign each year to a generation
     for (const year of modelYears) {
         const generation = await getGenerationForModelYear(year);
-        
+
         if (generation) {
             // Create the generation group if it doesn't exist
             if (!result[generation.name]) {
                 result[generation.name] = [];
             }
-            
+
             // Add the year to its generation group
             result[generation.name].push(year);
         } else {
@@ -129,11 +129,11 @@ export async function groupModelYearsByGeneration(modelYears: string[]): Promise
             ungroupedYears.push(year);
         }
     }
-    
+
     // Add ungrouped years if there are any
     if (ungroupedYears.length > 0) {
         result['Other Years'] = ungroupedYears;
     }
-    
+
     return result;
 }
