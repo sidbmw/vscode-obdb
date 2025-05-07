@@ -9,6 +9,7 @@ import { FormulaRangeValidationRule } from './rules/formulaRangeValidationRule';
 import { SignalBitOverlapRule } from './rules/signalBitOverlapRule';
 import { UniqueSignalIdRule } from './rules/uniqueSignalIdRule';
 import { SignalPathSuggestionRule } from './rules/signalPathSuggestionRule';
+import { SignalSentenceCaseRule } from './rules/signalSentenceCaseRule';
 
 /**
  * Registry that manages all linter rules
@@ -47,7 +48,8 @@ export class RuleRegistry {
       FormulaRangeValidationRule,
       SignalBitOverlapRule,
       UniqueSignalIdRule,
-      SignalPathSuggestionRule
+      SignalPathSuggestionRule,
+      SignalSentenceCaseRule
     ];
 
     // Instantiate each rule class
