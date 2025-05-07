@@ -51,17 +51,29 @@ function calculateFormulaRange(signal: any): { min: number, max: number } | unde
   const div = signal.fmt.div || 1;
   const add = signal.fmt.add || 0;
   const len = signal.fmt.len;
+  const isSigned = signal.fmt.sign === true;
 
   // If no length specified, we can't calculate the range
   if (typeof len !== 'number') {
     return undefined;
   }
 
-  // Calculate the max possible raw value based on bit length
-  const maxRawValue = Math.pow(2, len) - 1;
+  // Calculate the min and max possible raw values based on bit length
+  let minRawValue: number;
+  let maxRawValue: number;
+
+  if (isSigned) {
+    // For signed values, min is -2^(len-1) and max is 2^(len-1)-1
+    minRawValue = -Math.pow(2, len - 1);
+    maxRawValue = Math.pow(2, len - 1) - 1;
+  } else {
+    // For unsigned values, min is 0 and max is 2^len-1
+    minRawValue = 0;
+    maxRawValue = Math.pow(2, len) - 1;
+  }
 
   // Calculate the range using the formula: x = v * mul / div + add
-  const minPossibleValue = (0 * mul / div) + add;
+  const minPossibleValue = (minRawValue * mul / div) + add;
   const maxPossibleValue = (maxRawValue * mul / div) + add;
 
   // Return the range, rounded to 6 decimal places for display
