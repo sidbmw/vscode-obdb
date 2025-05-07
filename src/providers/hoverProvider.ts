@@ -9,6 +9,21 @@ import * as yaml from 'js-yaml';
 import { groupModelYearsByGeneration } from '../utils/generations';
 
 /**
+ * Strips the receive filter (middle part) from a command ID if present
+ * @param commandId The command ID in format "header.response.command" or "header.command"
+ * @returns Simplified command ID in format "header.command"
+ */
+function stripReceiveFilter(commandId: string): string {
+  const parts = commandId.split('.');
+  // If we have 3 parts (header.response.command), take first and last
+  if (parts.length === 3) {
+    return `${parts[0]}.${parts[2]}`;
+  }
+  // Otherwise return original
+  return commandId;
+}
+
+/**
  * Creates a hover provider for JSON files
  * @returns A disposable hover provider registration
  */
@@ -111,6 +126,28 @@ export function createHoverProvider(): vscode.Disposable {
             // Get unsupported model years for this command
             const unsupportedYears = await getUnsupportedModelYearsForCommand(commandId);
 
+            // Get supported model years for this command
+            const supportedYears = await getSupportedModelYearsForCommand(commandId);
+
+            // Display supported model years
+            if (supportedYears.length > 0) {
+              // Group supported years by generation
+              const groupedSupportedYears = await groupModelYearsByGeneration(supportedYears);
+
+              // Display supported years grouped by generation
+              markdownContent.appendMarkdown(`### Supported Model Years\n\n`);
+
+              for (const [generationName, years] of Object.entries(groupedSupportedYears)) {
+                // Sort years numerically within each generation
+                years.sort((a, b) => parseInt(a) - parseInt(b));
+
+                markdownContent.appendMarkdown(`- **${generationName}:** ${years.join(', ')}\n\n`);
+              }
+            } else {
+              markdownContent.appendMarkdown(`### Supported Model Years\n\nNo support information available.\n\n`);
+            }
+
+            // Display unsupported model years
             if (unsupportedYears.length > 0) {
               // Group unsupported years by generation
               const groupedUnsupportedYears = await groupModelYearsByGeneration(unsupportedYears);
@@ -124,13 +161,9 @@ export function createHoverProvider(): vscode.Disposable {
 
                 markdownContent.appendMarkdown(`- **${generationName}:** ${years.join(', ')}\n\n`);
               }
-
-              // Return the hover for command definition
-              return new vscode.Hover(markdownContent);
-            } else {
-              markdownContent.appendMarkdown(`No compatibility issues found.\n\n`);
-              return new vscode.Hover(markdownContent);
             }
+
+            return new vscode.Hover(markdownContent);
           }
         }
       }
@@ -174,7 +207,7 @@ async function getUnsupportedModelYearsForCommand(commandId: string): Promise<st
           const unsupportedCommands = Object.values(yamlContent.unsupported_commands_by_ecu as Record<string, string[]>)
             .flat() as string[];
 
-          if (unsupportedCommands.includes(commandId)) {
+          if (unsupportedCommands.includes(commandId) || unsupportedCommands.includes(stripReceiveFilter(commandId))) {
             unsupportedYears.push(year);
           }
         }
@@ -187,4 +220,95 @@ async function getUnsupportedModelYearsForCommand(commandId: string): Promise<st
   }
 
   return unsupportedYears;
+}
+
+/**
+ * Gets all model years that support a specific command
+ * @param commandId The command ID to check (e.g. '7E0.2211BA')
+ * @returns Array of model years that support the command
+ */
+async function getSupportedModelYearsForCommand(commandId: string): Promise<string[]> {
+  // Extract command part (e.g., "2211BA" from "7E0.2211BA")
+  const cmdPart = commandId.split('.').pop() || '';
+
+  // Find all model year directories
+  const testCasesPath = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, 'tests', 'test_cases');
+  const supportedYears: string[] = [];
+
+  try {
+    // Read test case directories to find model years
+    const years = await fs.promises.readdir(testCasesPath);
+
+    // For each year directory
+    for (const year of years) {
+      // Skip if not a directory
+      const yearPath = path.join(testCasesPath, year);
+      const yearStat = await fs.promises.stat(yearPath);
+      if (!yearStat.isDirectory()) {
+        continue;
+      }
+
+      // First check for command files that explicitly implement this command
+      const commandsDir = path.join(yearPath, 'commands');
+      let foundInYear = false;
+
+      try {
+        // Check if commands directory exists
+        const commandsDirStat = await fs.promises.stat(commandsDir);
+
+        if (commandsDirStat.isDirectory()) {
+          // Look for matching command file
+          const commandFiles = await fs.promises.readdir(commandsDir);
+
+          // If we find a file that matches our command ID, this year supports it
+          for (const file of commandFiles) {
+            if (file.includes(cmdPart) || file.includes(commandId)) {
+              supportedYears.push(year);
+              foundInYear = true;
+              break;
+            }
+          }
+        }
+      } catch (err) {
+        // It's ok if there's no commands directory
+      }
+
+      // If not found by direct file, check command_support.yaml
+      if (!foundInYear) {
+        const supportFilePath = path.join(yearPath, 'command_support.yaml');
+        try {
+          const content = await fs.promises.readFile(supportFilePath, 'utf-8');
+          const yamlContent = yaml.load(content) as any;
+
+          // Check supported_commands_by_ecu section (if it exists)
+          if (yamlContent && yamlContent.supported_commands_by_ecu) {
+            // Look through each ECU's supported commands
+            for (const [ecu, commands] of Object.entries(yamlContent.supported_commands_by_ecu as Record<string, string[]>)) {
+              // Each command might be in format "0101:ECT,RPM"
+              for (const cmd of commands as string[]) {
+                const cmdParts = cmd.split(':');
+                if (cmdParts.length > 0) {
+                  // Just compare the command part (e.g., "0101")
+                  if (cmdParts[0] === cmdPart ||
+                      `${ecu}.${cmdParts[0]}` === commandId ||
+                      cmd.includes(cmdPart)) {
+                    supportedYears.push(year);
+                    foundInYear = true;
+                    break;
+                  }
+                }
+              }
+              if (foundInYear) break;
+            }
+          }
+        } catch (err) {
+          // It's ok if the support file doesn't exist
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`Error finding supported model years for ${commandId}:`, err);
+  }
+
+  return supportedYears;
 }
