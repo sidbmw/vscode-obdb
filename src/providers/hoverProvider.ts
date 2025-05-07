@@ -129,38 +129,51 @@ export function createHoverProvider(): vscode.Disposable {
             // Get supported model years for this command
             const supportedYears = await getSupportedModelYearsForCommand(commandId);
 
-            // Display supported model years
-            if (supportedYears.length > 0) {
-              // Group supported years by generation
-              const groupedSupportedYears = await groupModelYearsByGeneration(supportedYears);
+            // Create a combined table of all years with support status
+            const allYears = [...new Set([...supportedYears, ...unsupportedYears])];
 
-              // Display supported years grouped by generation
-              markdownContent.appendMarkdown(`### Supported Model Years\n\n`);
+            if (allYears.length > 0) {
+              // Group all years by generation
+              const allYearsByGeneration = await groupModelYearsByGeneration(allYears);
 
-              for (const [generationName, years] of Object.entries(groupedSupportedYears)) {
-                // Sort years numerically within each generation
-                years.sort((a, b) => parseInt(a) - parseInt(b));
+              markdownContent.appendMarkdown('```\n');
 
-                markdownContent.appendMarkdown(`- **${generationName}:** ${years.join(', ')}\n\n`);
+              // Display years grouped by generation in descending order
+              const sortedGenerations = Object.entries(allYearsByGeneration).sort((a, b) => {
+                // Extract generation numbers for sorting
+                const genNumA = parseInt(a[1][0]);
+                const genNumB = parseInt(b[1][0]);
+                return genNumB - genNumA; // Descending order
+              });
+
+              // Display years grouped by generation
+              for (const [generationName, yearsInGeneration] of sortedGenerations) {
+                // Find min and max years in this generation
+                const minYear = Math.min(...yearsInGeneration.map(y => parseInt(y)));
+                const maxYear = Math.max(...yearsInGeneration.map(y => parseInt(y)));
+
+                // Add generation header
+                markdownContent.appendMarkdown(`- ${generationName.padEnd(8)}\n`);
+
+                // Generate every year in the range, including gaps
+                for (let yearNum = maxYear; yearNum >= minYear; yearNum--) {
+                  const year = yearNum.toString();
+                  const isSupported = supportedYears.includes(year);
+                  const isUnsupported = unsupportedYears.includes(year);
+
+                  let statusEmoji = "?"; // Unknown status
+
+                  if (isSupported) {
+                    statusEmoji = "✅";
+                  } else if (isUnsupported) {
+                    statusEmoji = "❌";
+                  }
+
+                  markdownContent.appendMarkdown(`| ${year.padEnd(4)} | ${statusEmoji} |\n`);
+                }
               }
             } else {
-              markdownContent.appendMarkdown(`### Supported Model Years\n\nNo support information available.\n\n`);
-            }
-
-            // Display unsupported model years
-            if (unsupportedYears.length > 0) {
-              // Group unsupported years by generation
-              const groupedUnsupportedYears = await groupModelYearsByGeneration(unsupportedYears);
-
-              // Display unsupported years grouped by generation
-              markdownContent.appendMarkdown(`### Unsupported Model Years\n\n`);
-
-              for (const [generationName, years] of Object.entries(groupedUnsupportedYears)) {
-                // Sort years numerically within each generation
-                years.sort((a, b) => parseInt(a) - parseInt(b));
-
-                markdownContent.appendMarkdown(`- **${generationName}:** ${years.join(', ')}\n\n`);
-              }
+              markdownContent.appendMarkdown(`### Model Year Support\n\nNo support information available.\n\n`);
             }
 
             return new vscode.Hover(markdownContent);
