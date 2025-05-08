@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { groupModelYearsByGeneration } from '../utils/generations';
+import { numberToExcelColumn, bixToByte } from '../utils/bixConverter';
 
 /**
  * Strips the receive filter (middle part) from a command ID if present
@@ -121,7 +122,34 @@ export function createHoverProvider(): vscode.Disposable {
         }
       }
 
-      // CASE 3: Check for command definition hover
+      // CASE 3: Check for bix values in signal format definitions
+      // Example: {"id": "SIGNAL_ID", "fmt": {"bix": 264, ...}, ...}
+      if (wordRange) {
+        const word = document.getText(wordRange);
+        const lineText = document.lineAt(position.line).text;
+
+        // Check if we're hovering on a bix value
+        const bixRegex = /"bix"\s*:\s*(\d+)/;
+        const bixMatch = bixRegex.exec(lineText);
+
+        if (bixMatch && word === bixMatch[1]) {
+          // Get the bix value
+          const bixValue = parseInt(word);
+
+          // Calculate alphabetical equivalent (A-Z, AA-ZZ, etc.)
+          const alphaEquivalent = numberToExcelColumn(bixValue);
+
+          // Calculate byte value (bix / 8)
+          const byteValue = bixToByte(bixValue);
+
+          // Create hover content
+          markdownContent.appendMarkdown(`**Byte**: \`${byteValue}\` / \`${alphaEquivalent}\``);
+
+          return new vscode.Hover(markdownContent);
+        }
+      }
+
+      // CASE 4: Check for command definition hover
       // First check if we're in a command object by examining the surrounding context
       const positionResult = isPositionInCommand(document, position);
       if (positionResult.isCommand) {
