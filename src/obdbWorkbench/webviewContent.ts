@@ -328,30 +328,32 @@ export function getWebviewContent(
     'const numericRadio = document.getElementById("numeric-format");' +
     'const alphabeticRadio = document.getElementById("alphabetic-format");' +
 
-    // Initialize all bit cells to always use numeric format
-    'const bitCells = document.querySelectorAll(".bit-cell");' +
-    'bitCells.forEach(cell => {' +
-    'cell.textContent = cell.getAttribute("data-numeric");' +
-    '});' +
+    // Try to load saved format preference
+    'const savedFormat = sessionStorage.getItem("obdb-index-format") || "numeric";' +
+
+    // Set the radio button based on saved preference
+    'if (savedFormat === "alphabetic" && alphabeticRadio) {' +
+    '  alphabeticRadio.checked = true;' +
+    '} else if (numericRadio) {' +
+    '  numericRadio.checked = true;' +
+    '}' +
 
     'if (numericRadio && alphabeticRadio) {' +
     'numericRadio.addEventListener("change", () => {' +
     'if (numericRadio.checked) {' +
-    'updateIndexFormat("numeric");' +
+    '  updateIndexFormat("numeric");' +
+    '  sessionStorage.setItem("obdb-index-format", "numeric");' +
     '}' +
     '});' +
     'alphabeticRadio.addEventListener("change", () => {' +
     'if (alphabeticRadio.checked) {' +
-    'updateIndexFormat("alphabetic");' +
+    '  updateIndexFormat("alphabetic");' +
+    '  sessionStorage.setItem("obdb-index-format", "alphabetic");' +
     '}' +
     '});' +
 
     // Apply the currently selected format on page load
-    'if (alphabeticRadio.checked) {' +
-    'updateIndexFormat("alphabetic");' +
-    '} else {' +
-    'updateIndexFormat("numeric");' +
-    '}' +
+    'updateIndexFormat(savedFormat);' +
     '}' +
     'function updateIndexFormat(format) {' +
     'const byteIndexElements = document.querySelectorAll(".byte-index");' +
