@@ -358,11 +358,25 @@ export function getWebviewContent(
     'byteIndexElements.forEach(element => {' +
     'element.textContent = element.getAttribute("data-" + format);' +
     '});' +
-    // When using alphabetic format, only update byte indices, not bit cells
-    'if (format === "numeric") {' +
+
+    // Update bit column headers
+    'const bitHeaders = document.querySelectorAll(".bit-header");' +
+    'bitHeaders.forEach(header => {' +
+    'header.textContent = header.getAttribute("data-" + format);' +
+    '});' +
+
+    // Update bit cells based on format
     'const bitCells = document.querySelectorAll(".bit-cell");' +
+    'if (format === "numeric") {' +
     'bitCells.forEach(cell => {' +
     'cell.textContent = cell.getAttribute("data-numeric");' +
+    '});' +
+    '} else if (format === "alphabetic") {' +
+    // When using alphabetic format, show bit values (1, 2, 4, 8, etc.) in reverse order
+    'bitCells.forEach(cell => {' +
+    'const bitIndex = 7 - parseInt(cell.getAttribute("data-numeric") % 8);' +
+    'const bitValue = Math.pow(2, bitIndex);' +
+    'cell.textContent = bitValue;' +
     '});' +
     '}' +
     '}' +

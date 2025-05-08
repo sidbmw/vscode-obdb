@@ -133,7 +133,8 @@ export function generateBitmapHtml(command: any, signals: Signal[]): string {
     // Table header with bit indices
     html += '<thead><tr><th></th>';
     for (let i = 0; i < 8; i++) {
-      html += `<th>${i}</th>`;
+      // Store both numeric (0-7) and reversed (7-0) bit indices
+      html += `<th class="bit-header" data-numeric="${i}" data-alphabetic="${7-i}">${i}</th>`;
     }
     html += '</tr></thead>';
 
