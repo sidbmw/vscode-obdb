@@ -78,7 +78,50 @@ export function createHoverProvider(): vscode.Disposable {
         }
       }
 
-      // CASE 2: Check for command definition hover
+      // CASE 2: Check for signal group hover
+      // We're looking for a pattern like: {"id": "SIGNAL_GROUP_ID", ..., "matchingRegex": "REGEX_PATTERN", ...}
+      if (wordRange) {
+        const word = document.getText(wordRange);
+        const lineText = document.lineAt(position.line).text;
+
+        // Check if this is a line with a signal group definition
+        const signalGroupIdRegex = /"id"\s*:\s*"([A-Za-z0-9_]+)"/;
+        const matchingRegexPropRegex = /"matchingRegex"\s*:\s*"([^"]+)"/;
+
+        const signalGroupMatch = signalGroupIdRegex.exec(lineText);
+        const matchingRegexMatch = matchingRegexPropRegex.exec(lineText);
+
+        // If we have both an ID and a matchingRegex in the same line, it's a signal group
+        if (signalGroupMatch && matchingRegexMatch) {
+          const signalGroupId = signalGroupMatch[1];
+          const matchingRegexPattern = matchingRegexMatch[1];
+
+          // Find all signals in the file that match this regex
+          const matchingSignals = await countMatchingSignals(document, matchingRegexPattern);
+
+          // Create the hover content
+          markdownContent.appendMarkdown(`## Signal Group: \`${signalGroupId}\`\n\n`);
+          markdownContent.appendMarkdown(`Matching Pattern: \`${matchingRegexPattern}\`\n\n`);
+          markdownContent.appendMarkdown(`**${matchingSignals.length} matching signals found in this file**\n\n`);
+
+          // If we have matching signals, list the first few
+          if (matchingSignals.length > 0) {
+            markdownContent.appendMarkdown(`### Matching Signals (showing first ${Math.min(10, matchingSignals.length)})\n\n`);
+            matchingSignals.slice(0, 10).forEach(signal => {
+              markdownContent.appendMarkdown(`- \`${signal}\`\n`);
+            });
+
+            // If there are more than 10 matches, indicate it
+            if (matchingSignals.length > 10) {
+              markdownContent.appendMarkdown(`\n... and ${matchingSignals.length - 10} more\n`);
+            }
+          }
+
+          return new vscode.Hover(markdownContent);
+        }
+      }
+
+      // CASE 3: Check for command definition hover
       // First check if we're in a command object by examining the surrounding context
       const positionResult = isPositionInCommand(document, position);
       if (positionResult.isCommand) {
@@ -324,4 +367,44 @@ async function getSupportedModelYearsForCommand(commandId: string): Promise<stri
   }
 
   return supportedYears;
+}
+
+/**
+ * Counts all signals in the document that match a given regex pattern
+ * @param document The document to search
+ * @param regexPattern The regex pattern to match
+ * @returns Array of matching signal IDs
+ */
+async function countMatchingSignals(document: vscode.TextDocument, regexPattern: string): Promise<string[]> {
+  const matchingSignals: string[] = [];
+  const regex = new RegExp(regexPattern.replace(/\\\\/g, "\\"));
+
+  // Parse the entire document content to find signal definitions
+  const text = document.getText();
+  let jsonContent;
+
+  try {
+    jsonContent = JSON.parse(text);
+  } catch (error) {
+    console.error("Failed to parse JSON document:", error);
+    return matchingSignals;
+  }
+
+  // Check if we have a commands array with signals
+  if (jsonContent && jsonContent.commands) {
+    // Iterate through each command
+    for (const command of jsonContent.commands) {
+      // Check if the command has signals
+      if (command.signals && Array.isArray(command.signals)) {
+        // Check each signal ID against the regex
+        for (const signal of command.signals) {
+          if (signal.id && regex.test(signal.id)) {
+            matchingSignals.push(signal.id);
+          }
+        }
+      }
+    }
+  }
+
+  return matchingSignals;
 }
