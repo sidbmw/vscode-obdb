@@ -17,6 +17,25 @@ export interface Signal {
 }
 
 /**
+ * Interface for a signal group object (simplified for ID checking)
+ */
+export interface SignalGroup {
+  id: string;
+  // Potentially other properties if other rules need to check signal groups
+}
+
+/**
+ * Contextual information about the document being linted.
+ */
+export interface DocumentContext {
+  /**
+   * A map of all unique IDs (from signals and signal groups) found in the document
+   * to their first encountered jsonc.Node (the object node, not the ID property node).
+   */
+  allIds: Map<string, jsonc.Node>;
+}
+
+/**
  * Interface for linter rule validation results
  */
 export interface LintResult {
@@ -82,9 +101,10 @@ export interface ILinterRule {
   getConfig(): LinterRuleConfig;
 
   /**
-   * Validates a signal against this rule
-   * @param signal The signal to validate
-   * @param node The JSONC node for the signal
+   * Validates a target (signal or signal group) against this rule
+   * @param target The signal or signal group object to validate
+   * @param node The JSONC node for the target object
+   * @param context The document-wide context, including all pre-parsed IDs
    */
-  validate(signal: Signal, node: jsonc.Node): LintResult | null;
+  validate(target: Signal | SignalGroup, node: jsonc.Node, context: DocumentContext): LintResult | null;
 }

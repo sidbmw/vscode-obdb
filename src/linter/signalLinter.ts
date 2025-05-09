@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as jsonc from 'jsonc-parser';
 import { RuleRegistry } from './ruleRegistry';
-import { Signal, LintResult, getSeverity } from './rules/rule';
+import { Signal, SignalGroup, LintResult, getSeverity, DocumentContext } from './rules/rule';
 
 /**
  * Main signal linter class
@@ -15,14 +15,18 @@ export class SignalLinter {
   }
 
   /**
-   * Lint a signal against all enabled rules
+   * Lint a signal or signal group against all enabled rules
+   * @param target The signal or signal group to validate
+   * @param node The JSONC node for the target
+   * @param context Document-wide context including all IDs
    */
-  public lintSignal(signal: Signal, node: jsonc.Node): LintResult[] {
+  public lintTarget(target: Signal | SignalGroup, node: jsonc.Node, context: DocumentContext): LintResult[] {
     const results: LintResult[] = [];
     const enabledRules = this.ruleRegistry.getEnabledRules();
 
     for (const rule of enabledRules) {
-      const ruleResult = rule.validate(signal, node);
+      // Pass the context to each rule
+      const ruleResult = rule.validate(target, node, context);
       if (ruleResult) {
         results.push(ruleResult);
       }

@@ -1,8 +1,8 @@
 import * as jsonc from 'jsonc-parser';
-import { ILinterRule, LintResult, Signal, LintSeverity, LinterRuleConfig } from './rule';
+import { ILinterRule, LintResult, Signal, LintSeverity, LinterRuleConfig, DocumentContext, SignalGroup } from './rule';
 
 /**
- * Rule that validates that signal IDs are unique across all commands in a file
+ * Rule that validates that signal and signal group IDs are unique across the entire file.
  */
 export class UniqueSignalIdRule implements ILinterRule {
   /**
@@ -19,94 +19,34 @@ export class UniqueSignalIdRule implements ILinterRule {
   }
 
   /**
-   * Validates a signal against this rule
-   * This implementation examines the entire document structure on each validation call
+   * Validates a signal or signal group ID against this rule using pre-parsed document context.
    *
-   * @param signal The signal to validate
-   * @param node The JSONC node for the signal
+   * @param target The signal or signal group object (must have an 'id' property)
+   * @param node The JSONC node for the entire signal or signal group object
+   * @param context The document-wide context containing all pre-parsed IDs
    */
-  public validate(signal: Signal, node: jsonc.Node): LintResult | null {
-    // Get the ID node to target in diagnostic
-    const idNode = jsonc.findNodeAtLocation(node, ['id']);
-    if (!idNode) return null;
+  public validate(target: Signal | SignalGroup, node: jsonc.Node, context: DocumentContext): LintResult | null {
+    const idValue = target.id;
 
-    const signalId = signal.id;
+    // Find the JSONC node for the 'id' property within the current object node for accurate diagnostic placement.
+    const idPropertyNode = jsonc.findNodeAtLocation(node, ['id']);
+    if (!idPropertyNode) {
+      // Should not happen if target.id is valid and node is the correct object node.
+      return null;
+    }
 
-    // Find the root JSON node by traversing up the tree
-    let rootNode = this.findRootNode(node);
-    if (!rootNode) return null;
+    const firstOccurrenceNode = context.allIds.get(idValue);
 
-    // Find all signals with this ID in the document
-    const occurrences = this.findSignalIdOccurrences(rootNode, signalId);
-
-    // If we found multiple occurrences and this isn't the first one
-    if (occurrences.length > 1 && occurrences[0] !== node) {
-      // Report a duplicate ID error
+    // If an entry for this ID exists in allIds, AND the node in allIds is *different*
+    // from the current object node, then the current node is a subsequent, duplicate occurrence.
+    if (firstOccurrenceNode && firstOccurrenceNode !== node) {
       return {
         ruleId: this.getConfig().id,
-        message: `Signal ID "${signalId}" is not unique across all commands in this file. First occurrence is in another command.`,
-        node: idNode
+        message: `ID \"${idValue}\" is not unique. Another signal or signal group in this file uses the same ID.`,
+        node: idPropertyNode, // Report error on the 'id' property of the duplicate.
       };
     }
 
     return null;
-  }
-
-  /**
-   * Finds the root node by traversing up the tree
-   * @param node The node to start from
-   */
-  private findRootNode(node: jsonc.Node): jsonc.Node | null {
-    let current: jsonc.Node | undefined = node;
-
-    // Traverse up the tree until we reach the root node (no parent)
-    while (current?.parent) {
-      current = current.parent;
-    }
-
-    return current || null;
-  }
-
-  /**
-   * Finds all occurrences of a signal ID in the document
-   * @param rootNode The root JSON node
-   * @param targetSignalId The signal ID to find
-   * @returns Array of signal nodes with the matching ID
-   */
-  private findSignalIdOccurrences(rootNode: jsonc.Node, targetSignalId: string): jsonc.Node[] {
-    const occurrences: jsonc.Node[] = [];
-
-    // Find the commands array node
-    const commandsArrayNode = jsonc.findNodeAtLocation(rootNode, ['commands']);
-    if (!commandsArrayNode || !commandsArrayNode.children) {
-      return occurrences;
-    }
-
-    // Iterate through all commands
-    for (const commandNode of commandsArrayNode.children) {
-      // Find the signals array in this command
-      const signalsNode = jsonc.findNodeAtLocation(commandNode, ['signals']);
-      if (!signalsNode || !signalsNode.children) continue;
-
-      // Check each signal in this command
-      for (const signalNode of signalsNode.children) {
-        try {
-          // Get the signal ID
-          const idNode = jsonc.findNodeAtLocation(signalNode, ['id']);
-          if (!idNode) continue;
-
-          const signalId = jsonc.getNodeValue(idNode);
-
-          // If this signal ID matches our target
-          if (signalId === targetSignalId) {
-            occurrences.push(signalNode);
-          }
-        } catch (err) {
-          console.error('Error checking signal ID occurrences:', err);
-        }
-      }
-    }
-
-    return occurrences;
   }
 }

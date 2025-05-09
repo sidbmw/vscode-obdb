@@ -6,6 +6,7 @@ import * as jsonc from 'jsonc-parser';
 import { generateCommandId } from '../utils/commandParser';
 import { SignalLinter } from '../linter/signalLinter';
 import { SignalLinterCodeActionProvider } from './signalLinterCodeActionProvider';
+import { DocumentContext, Signal, SignalGroup } from '../linter/rules/rule';
 
 let diagnosticCollection: vscode.DiagnosticCollection;
 const signalLinter = new SignalLinter();
@@ -74,100 +75,145 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
     const diagnostics: vscode.Diagnostic[] = [];
     const lintResults: any[] = [];
 
-    // Parse the JSON document using jsonc-parser
     const text = document.getText();
     const rootNode = jsonc.parseTree(text);
 
     if (!rootNode) {
-      // Not valid JSON, nothing to do
       diagnosticCollection.set(document.uri, []);
       signalLinterCodeActionProvider.clearLintResults(document.uri.toString());
       return;
     }
 
-    // Find the commands array node
-    const commandsArrayNode = findNodeAtLocation(rootNode, ["commands"]);
+    // Pre-pass: Collect all signal and signal group IDs
+    const allIds: Map<string, jsonc.Node> = new Map();
+    const documentContext: DocumentContext = { allIds };
 
-    if (!commandsArrayNode || commandsArrayNode.type !== 'array') {
-      // No commands array found
-      diagnosticCollection.set(document.uri, []);
-      signalLinterCodeActionProvider.clearLintResults(document.uri.toString());
-      return;
+    const commandsArrayNode = findNodeAtLocation(rootNode, ["commands"]);
+    if (commandsArrayNode && commandsArrayNode.type === 'array' && commandsArrayNode.children) {
+      for (const commandNode of commandsArrayNode.children) {
+        const signalsNode = findNodeAtLocation(commandNode, ["signals"]);
+        if (signalsNode && signalsNode.type === 'array' && signalsNode.children) {
+          for (const signalNode of signalsNode.children) {
+            try {
+              const signalIdNode = jsonc.findNodeAtLocation(signalNode, ['id']);
+              if (signalIdNode) {
+                const signalId = jsonc.getNodeValue(signalIdNode);
+                if (typeof signalId === 'string' && !allIds.has(signalId)) {
+                  allIds.set(signalId, signalNode); // Store the signal object node
+                }
+              }
+            } catch (err) {
+              console.error('Error pre-parsing signal ID in commands:', err);
+            }
+          }
+        }
+      }
+    }
+
+    const signalGroupsArrayNode = findNodeAtLocation(rootNode, ["signalGroups"]);
+    if (signalGroupsArrayNode && signalGroupsArrayNode.type === 'array' && signalGroupsArrayNode.children) {
+      for (const signalGroupNode of signalGroupsArrayNode.children) {
+        try {
+          const groupIdNode = jsonc.findNodeAtLocation(signalGroupNode, ['id']);
+          if (groupIdNode) {
+            const groupId = jsonc.getNodeValue(groupIdNode);
+            if (typeof groupId === 'string' && !allIds.has(groupId)) {
+              allIds.set(groupId, signalGroupNode); // Store the signalGroup object node
+            }
+          }
+        } catch (err) {
+          console.error('Error pre-parsing signal group ID:', err);
+        }
+      }
     }
 
     // Iterate through each command in the array
-    for (const commandNode of commandsArrayNode.children || []) {
-      // Find the hdr, rax, cmd, and dbg properties in each command
-      const hdrNode = findNodeAtLocation(commandNode, ["hdr"]);
-      const cmdNode = findNodeAtLocation(commandNode, ["cmd"]);
-      const raxNode = findNodeAtLocation(commandNode, ["rax"]);
-      const dbgNode = findNodeAtLocation(commandNode, ["dbg"]);
-      const signalsNode = findNodeAtLocation(commandNode, ["signals"]);
+    if (commandsArrayNode && commandsArrayNode.type === 'array' && commandsArrayNode.children) {
+      for (const commandNode of commandsArrayNode.children || []) {
+        const hdrNode = findNodeAtLocation(commandNode, ["hdr"]);
+        const cmdNode = findNodeAtLocation(commandNode, ["cmd"]);
+        const raxNode = findNodeAtLocation(commandNode, ["rax"]);
+        const dbgNode = findNodeAtLocation(commandNode, ["dbg"]);
+        const signalsNode = findNodeAtLocation(commandNode, ["signals"]);
 
-      // Check for debug commands and add warning
-      if (dbgNode && dbgNode.type === 'boolean' && jsonc.getNodeValue(dbgNode) === true) {
-        // Get the exact position of the "dbg": true in the document
-        if (dbgNode.offset !== undefined && dbgNode.length !== undefined) {
-          const startPos = document.positionAt(dbgNode.offset);
-          const endPos = document.positionAt(dbgNode.offset + dbgNode.length);
-
-          const diagnostic = new vscode.Diagnostic(
-            new vscode.Range(startPos, endPos),
-            "This is a debug command, please graduate it once it's confirmed to work",
-            vscode.DiagnosticSeverity.Warning
-          );
-          diagnostic.code = 'obdb-debug-command';
-          diagnostics.push(diagnostic);
-        }
-      }
-
-      // Process command validation
-      if (hdrNode && cmdNode && hdrNode.type === 'string') {
-        const header = jsonc.getNodeValue(hdrNode);
-        const cmd = jsonc.getNodeValue(cmdNode);
-        const rax = raxNode ? jsonc.getNodeValue(raxNode) : undefined;
-
-        // Generate the command ID with RAX when available
-        const commandId = generateCommandId(header, cmd, rax);
-
-        // Check if command is unsupported
-        const isSupportedByAnyYear = await isCommandSupported(commandId);
-        const isUnsupportedByAnyYear = await isCommandUnsupported(commandId);
-
-        // Only mark commands that are not supported by any model year
-        // and are explicitly marked as unsupported in at least one model year
-        if (!isSupportedByAnyYear && isUnsupportedByAnyYear) {
-          // Use the exact position of the cmd node in the document
-          if (cmdNode.offset !== undefined && cmdNode.length !== undefined) {
-            const startPos = document.positionAt(cmdNode.offset);
-            const endPos = document.positionAt(cmdNode.offset + cmdNode.length);
+        // Check for debug commands and add warning
+        if (dbgNode && dbgNode.type === 'boolean' && jsonc.getNodeValue(dbgNode) === true) {
+          // Get the exact position of the "dbg": true in the document
+          if (dbgNode.offset !== undefined && dbgNode.length !== undefined) {
+            const startPos = document.positionAt(dbgNode.offset);
+            const endPos = document.positionAt(dbgNode.offset + dbgNode.length);
 
             const diagnostic = new vscode.Diagnostic(
               new vscode.Range(startPos, endPos),
-              `Command ${commandId} is not supported by any model year`,
-              vscode.DiagnosticSeverity.Error
+              "This is a debug command, please graduate it once it's confirmed to work",
+              vscode.DiagnosticSeverity.Warning
             );
-            diagnostic.code = 'obdb-unsupported-command';
+            diagnostic.code = 'obdb-debug-command';
             diagnostics.push(diagnostic);
           }
         }
-      }
 
-      // Process signals linting
-      if (signalsNode && signalsNode.type === 'array' && signalsNode.children) {
-        for (const signalNode of signalsNode.children) {
-          try {
-            const signal = jsonc.getNodeValue(signalNode);
-            const signalLintResults = signalLinter.lintSignal(signal, signalNode);
+        // Process command validation
+        if (hdrNode && cmdNode && hdrNode.type === 'string') {
+          const header = jsonc.getNodeValue(hdrNode);
+          const cmd = jsonc.getNodeValue(cmdNode);
+          const rax = raxNode ? jsonc.getNodeValue(raxNode) : undefined;
 
-            // Store lint results for the code action provider
-            lintResults.push(...signalLintResults);
+          // Generate the command ID with RAX when available
+          const commandId = generateCommandId(header, cmd, rax);
 
-            // Convert lint results to diagnostics
-            diagnostics.push(...signalLinter.toDiagnostics(document, signalLintResults));
-          } catch (err) {
-            console.error('Error linting signal:', err);
+          // Check if command is unsupported
+          const isSupportedByAnyYear = await isCommandSupported(commandId);
+          const isUnsupportedByAnyYear = await isCommandUnsupported(commandId);
+
+          // Only mark commands that are not supported by any model year
+          // and are explicitly marked as unsupported in at least one model year
+          if (!isSupportedByAnyYear && isUnsupportedByAnyYear) {
+            // Use the exact position of the cmd node in the document
+            if (cmdNode.offset !== undefined && cmdNode.length !== undefined) {
+              const startPos = document.positionAt(cmdNode.offset);
+              const endPos = document.positionAt(cmdNode.offset + cmdNode.length);
+
+              const diagnostic = new vscode.Diagnostic(
+                new vscode.Range(startPos, endPos),
+                `Command ${commandId} is not supported by any model year`,
+                vscode.DiagnosticSeverity.Error
+              );
+              diagnostic.code = 'obdb-unsupported-command';
+              diagnostics.push(diagnostic);
+            }
           }
+        }
+
+        // Process signals linting within commands
+        if (signalsNode && signalsNode.type === 'array' && signalsNode.children) {
+          for (const signalNode of signalsNode.children) {
+            try {
+              const signal = jsonc.getNodeValue(signalNode) as Signal;
+              // Pass the documentContext to the linter
+              const signalLintResults = signalLinter.lintTarget(signal, signalNode, documentContext);
+              lintResults.push(...signalLintResults);
+              diagnostics.push(...signalLinter.toDiagnostics(document, signalLintResults));
+            } catch (err) {
+              console.error('Error linting signal:', err);
+            }
+          }
+        }
+      }
+    }
+
+    // Process signalGroups linting (primarily for UniqueSignalIdRule)
+    if (signalGroupsArrayNode && signalGroupsArrayNode.type === 'array' && signalGroupsArrayNode.children) {
+      for (const signalGroupNode of signalGroupsArrayNode.children) {
+        try {
+          const signalGroup = jsonc.getNodeValue(signalGroupNode) as SignalGroup;
+          // Pass the documentContext to the linter
+          // Note: Most rules might not apply to SignalGroup, but UniqueSignalIdRule will.
+          const groupLintResults = signalLinter.lintTarget(signalGroup, signalGroupNode, documentContext);
+          lintResults.push(...groupLintResults);
+          diagnostics.push(...signalLinter.toDiagnostics(document, groupLintResults));
+        } catch (err) {
+          console.error('Error linting signal group:', err);
         }
       }
     }
