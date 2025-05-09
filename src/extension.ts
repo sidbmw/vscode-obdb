@@ -6,6 +6,7 @@ import { createTestProvider } from './providers/testProvider';
 import { registerTestCommands, testExecutionEvent } from './utils/testCommands';
 import { registerTestExplorer } from './providers/testExplorerProvider';
 import { createDefinitionProvider } from './providers/definitionProvider';
+import { createCodeLensProvider } from './providers/codeLensProvider'; // Added import
 
 // Create a diagnostic collection for test failures
 let testDiagnosticCollection: vscode.DiagnosticCollection;
@@ -39,6 +40,10 @@ export function activate(context: vscode.ExtensionContext) {
   // Register the definition provider for command ID navigation in YAML files
   const definitionProvider = createDefinitionProvider();
   console.log('Registered definition provider for command ID navigation');
+
+  // Register the CodeLens provider for JSON command files
+  const codeLensProvider = createCodeLensProvider(); // Added provider
+  console.log('Registered CodeLens provider for JSON command files');
 
   // Register test commands for running and debugging tests
   const testCommands = registerTestCommands(context);
@@ -78,6 +83,7 @@ export function activate(context: vscode.ExtensionContext) {
     diagnosticsProvider,
     testProvider,
     ...definitionProvider,
+    codeLensProvider, // Added provider to subscriptions
     ...testCommands,
     testExplorer,
     testExecutionSubscription,
