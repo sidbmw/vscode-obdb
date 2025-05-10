@@ -24,7 +24,7 @@ export class SignalSentenceCaseRule implements ILinterRule {
    * @param signal The signal to validate
    * @param node The JSONC node for the signal
    */
-  public validate(signal: Signal, node: jsonc.Node): LintResult | null {
+  public validateSignal(signal: Signal, node: jsonc.Node): LintResult | null {
     // Get the name node to target in diagnostic
     const nameNode = jsonc.findNodeAtLocation(node, ['name']);
     if (!nameNode) return null;

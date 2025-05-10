@@ -1,5 +1,5 @@
 import * as jsonc from 'jsonc-parser';
-import { ILinterRule, LintResult, Signal, LintSeverity, LinterRuleConfig } from './rule';
+import { ILinterRule, LintResult, Signal, LintSeverity, LinterRuleConfig, Command, DocumentContext } from './rule';
 
 /**
  * Rule that validates that signal bit ranges don't overlap within the same command
@@ -19,107 +19,57 @@ export class SignalBitOverlapRule implements ILinterRule {
   }
 
   /**
-   * Validates a signal against this rule
-   * @param signal The signal to validate
-   * @param node The JSONC node for the signal
+   * Validates a command for overlapping signal bit ranges.
+   * @param command The command being validated (not directly used, but part of the interface)
+   * @param commandNode The JSONC node for the command (not directly used, but part of the interface)
+   * @param signalsInCommand An array of signals belonging to this command, with their respective nodes
+   * @param context Document-wide context (not directly used for this rule, but part of the interface)
    */
-  public validate(signal: Signal, node: jsonc.Node): LintResult | null {
-    if (!signal.fmt) {
-      return null;
+  public validateCommand(command: Command, commandNode: jsonc.Node, signalsInCommand: { signal: Signal, node: jsonc.Node }[], context: DocumentContext): LintResult[] | null {
+    const results: LintResult[] = [];
+    if (signalsInCommand.length < 2) {
+      return null; // Not enough signals to overlap
     }
 
-    // We need to check for overlapping signals within the same command
-    // However, this rule is called with just one signal at a time
-    // We need to get the other signals in the same command from the document context
+    const signalBitRanges: { signalId: string, start: number, end: number, node: jsonc.Node }[] = [];
 
-    // First find the signals array node
-    const signalsArrayNode = this.findParentArrayNode(node);
-    if (!signalsArrayNode || !signalsArrayNode.children) {
-      return null;
-    }
-
-    // Now find the command node (parent of signals array)
-    const commandNode = signalsArrayNode.parent;
-    if (!commandNode) {
-      return null;
-    }
-
-    // Get the current signal's bit range
-    const bix = signal.fmt.bix || 0; // Default bix is 0 if not specified
-    const len = signal.fmt.len;
-
-    if (typeof len !== 'number') {
-      return null; // Skip signals without a length
-    }
-
-    // This signal's bit range is from bix to bix + len - 1
-    const currentSignalStart = bix;
-    const currentSignalEnd = bix + len - 1;
-
-    // Get the fmt node to use for the diagnostic
-    const fmtNode = jsonc.findNodeAtLocation(node, ['fmt']);
-    if (!fmtNode) {
-      return null;
-    }
-
-    // Check each signal in the command for overlaps
-    for (const otherSignalNode of signalsArrayNode.children) {
-      // Skip the current signal
-      if (otherSignalNode === node) {
-        continue;
+    for (const { signal, node } of signalsInCommand) {
+      if (!signal.fmt || typeof signal.fmt.len !== 'number') {
+        continue; // Skip signals without proper format or length
       }
+      const bix = signal.fmt.bix || 0;
+      const len = signal.fmt.len;
+      signalBitRanges.push({
+        signalId: signal.id,
+        start: bix,
+        end: bix + len - 1,
+        node: jsonc.findNodeAtLocation(node, ['fmt']) || node // Target fmt node or signal node
+      });
+    }
 
-      try {
-        const otherSignal: Signal = jsonc.getNodeValue(otherSignalNode);
+    // Check for overlaps
+    for (let i = 0; i < signalBitRanges.length; i++) {
+      for (let j = i + 1; j < signalBitRanges.length; j++) {
+        const sigA = signalBitRanges[i];
+        const sigB = signalBitRanges[j];
 
-        // Skip signals without fmt or len
-        if (!otherSignal.fmt || typeof otherSignal.fmt.len !== 'number') {
-          continue;
-        }
+        // Check for overlap: (StartA <= EndB) and (EndA >= StartB)
+        if (sigA.start <= sigB.end && sigA.end >= sigB.start) {
+          const fmtA = jsonc.findNodeAtLocation(signalsInCommand.find(s => s.signal.id === sigA.signalId)!.node, ['fmt']);
+          const fmtB = jsonc.findNodeAtLocation(signalsInCommand.find(s => s.signal.id === sigB.signalId)!.node, ['fmt']);
 
-        const otherBix = otherSignal.fmt.bix || 0; // Default bix is 0
-        const otherLen = otherSignal.fmt.len;
-
-        // Other signal's bit range is from otherBix to otherBix + otherLen - 1
-        const otherSignalStart = otherBix;
-        const otherSignalEnd = otherBix + otherLen - 1;
-
-        // Check for overlap: two ranges overlap if one starts before the other ends
-        const hasOverlap =
-          (currentSignalStart <= otherSignalEnd && currentSignalEnd >= otherSignalStart);
-
-        if (hasOverlap) {
-          const targetNode = fmtNode;
-
-          return {
+          results.push({
             ruleId: this.getConfig().id,
-            message: `Signal bit range (${currentSignalStart}-${currentSignalEnd}) overlaps with signal "${otherSignal.name}" bit range (${otherSignalStart}-${otherSignalEnd})`,
-            node: targetNode,
-            suggestion: {
-              title: `Adjust bit index or length to avoid overlap with "${otherSignal.name}"`,
-              edits: [] // No automatic fixes for this since it requires understanding the data format
-            }
-          };
+            message: `Signal '${sigA.signalId}' (bits ${sigA.start}-${sigA.end}) overlaps with signal '${sigB.signalId}' (bits ${sigB.start}-${sigB.end}) in the same command.`,
+            // Report on the 'fmt' node of the first signal in the overlap pair, or the signal node itself
+            node: fmtA || signalsInCommand.find(s => s.signal.id === sigA.signalId)!.node,
+          });
+          // Optionally, add a diagnostic for the second signal as well, or use relatedInformation
+          // For simplicity, one diagnostic per pair is often sufficient.
         }
-      } catch (err) {
-        console.error('Error checking bit range overlap:', err);
       }
     }
 
-    return null;
-  }
-
-  /**
-   * Finds the parent array node that contains this signal node
-   * @param node The current signal node
-   */
-  private findParentArrayNode(node: jsonc.Node): jsonc.Node | null {
-    // This node should be the object node for a signal
-    // Its parent should be an array node (signals array)
-    if (!node.parent || node.parent.type !== 'array') {
-      return null;
-    }
-
-    return node.parent;
+    return results.length > 0 ? results : null;
   }
 }

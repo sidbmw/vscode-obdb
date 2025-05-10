@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as jsonc from 'jsonc-parser';
 import { RuleRegistry } from './ruleRegistry';
-import { Signal, SignalGroup, LintResult, getSeverity, DocumentContext } from './rules/rule';
+import { LintResult, Signal, SignalGroup, DocumentContext, Command, ILinterRule, getSeverity } from './rules/rule';
 
 /**
  * Main signal linter class
@@ -15,23 +15,54 @@ export class SignalLinter {
   }
 
   /**
-   * Lint a signal or signal group against all enabled rules
+   * Lint an individual signal or signal group against all enabled rules that support signal-level linting.
    * @param target The signal or signal group to validate
    * @param node The JSONC node for the target
    * @param context Document-wide context including all IDs
    */
-  public lintTarget(target: Signal | SignalGroup, node: jsonc.Node, context: DocumentContext): LintResult[] {
+  public lintSignal(target: Signal | SignalGroup, node: jsonc.Node, context: DocumentContext): LintResult[] {
     const results: LintResult[] = [];
     const enabledRules = this.ruleRegistry.getEnabledRules();
 
     for (const rule of enabledRules) {
-      // Pass the context to each rule
-      const ruleResult = rule.validate(target, node, context);
-      if (ruleResult) {
-        results.push(ruleResult);
+      if (rule.validateSignal) {
+        // Pass the context to each rule
+        const ruleResult = rule.validateSignal(target, node, context);
+        if (ruleResult) {
+          if (Array.isArray(ruleResult)) {
+            results.push(...ruleResult);
+          } else {
+            results.push(ruleResult);
+          }
+        }
       }
     }
+    return results;
+  }
 
+  /**
+   * Lint a command and its signals against all enabled rules that support command-level linting.
+   * @param command The parsed command object
+   * @param commandNode The JSONC node for the command
+   * @param signalsInCommand An array of signals belonging to this command, with their respective nodes
+   * @param context Document-wide context
+   */
+  public lintCommand(command: Command, commandNode: jsonc.Node, signalsInCommand: { signal: Signal, node: jsonc.Node }[], context: DocumentContext): LintResult[] {
+    const results: LintResult[] = [];
+    const enabledRules = this.ruleRegistry.getEnabledRules();
+
+    for (const rule of enabledRules) {
+      if (rule.validateCommand) {
+        const ruleResult = rule.validateCommand(command, commandNode, signalsInCommand, context);
+        if (ruleResult) {
+          if (Array.isArray(ruleResult)) {
+            results.push(...ruleResult);
+          } else {
+            results.push(ruleResult);
+          }
+        }
+      }
+    }
     return results;
   }
 

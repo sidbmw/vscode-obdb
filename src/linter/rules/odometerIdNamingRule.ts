@@ -23,7 +23,7 @@ export class OdometerIdNamingRule implements ILinterRule {
    * @param signal The signal to validate
    * @param node The JSONC node for the signal
    */
-  public validate(signal: Signal, node: jsonc.Node): LintResult | null {
+  public validateSignal(signal: Signal, node: jsonc.Node): LintResult | null {
     if (signal.suggestedMetric === 'odometer') {
       // Get the id property node
       const idNode = jsonc.findNodeAtLocation(node, ['id']);

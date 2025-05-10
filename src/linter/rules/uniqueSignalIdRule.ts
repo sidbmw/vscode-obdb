@@ -25,7 +25,7 @@ export class UniqueSignalIdRule implements ILinterRule {
    * @param node The JSONC node for the entire signal or signal group object
    * @param context The document-wide context containing all pre-parsed IDs
    */
-  public validate(target: Signal | SignalGroup, node: jsonc.Node, context: DocumentContext): LintResult | null {
+  public validateSignal(target: Signal | SignalGroup, node: jsonc.Node, context: DocumentContext): LintResult | null {
     const idValue = target.id;
 
     // Find the JSONC node for the 'id' property within the current object node for accurate diagnostic placement.

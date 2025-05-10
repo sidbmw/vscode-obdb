@@ -191,7 +191,7 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
             try {
               const signal = jsonc.getNodeValue(signalNode) as Signal;
               // Pass the documentContext to the linter
-              const signalLintResults = signalLinter.lintTarget(signal, signalNode, documentContext);
+              const signalLintResults = signalLinter.lintSignal(signal, signalNode, documentContext);
               lintResults.push(...signalLintResults);
               diagnostics.push(...signalLinter.toDiagnostics(document, signalLintResults));
             } catch (err) {
@@ -209,7 +209,7 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
           const signalGroup = jsonc.getNodeValue(signalGroupNode) as SignalGroup;
           // Pass the documentContext to the linter
           // Note: Most rules might not apply to SignalGroup, but UniqueSignalIdRule will.
-          const groupLintResults = signalLinter.lintTarget(signalGroup, signalGroupNode, documentContext);
+          const groupLintResults = signalLinter.lintSignal(signalGroup, signalGroupNode, documentContext);
           lintResults.push(...groupLintResults);
           diagnostics.push(...signalLinter.toDiagnostics(document, groupLintResults));
         } catch (err) {

@@ -27,17 +27,18 @@ export class AcronymAtStartOfSignalNameRule implements ILinterRule {
     return this.config;
   }
 
-  validate(target: Signal | SignalGroup, node: jsonc.Node, context: DocumentContext): LintResult | null {
-    // This rule only applies to Signals, not SignalGroups
-    if (!('name' in target) || !target.name) {
-      return null;
-    }
-
-    const signalName = target.name;
+  /**
+   * Validates a signal against this rule
+   * @param signal The signal to validate
+   * @param node The JSONC node for the signal
+   */
+  public validateSignal(signal: Signal, node: jsonc.Node): LintResult | null {
+    // Get the name node to target in diagnostic
+    const signalName = signal.name;
     const nameNode = jsonc.findNodeAtLocation(node, ['name']);
 
     if (!nameNode) {
-      return null; // Should not happen if target.name exists
+      return null; // Should not happen if signal.name exists
     }
 
     for (const acronym of COMMON_ACRONYMS) {

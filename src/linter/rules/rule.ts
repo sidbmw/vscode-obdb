@@ -25,6 +25,16 @@ export interface SignalGroup {
 }
 
 /**
+ * Interface for a command object in the JSON.
+ * This is a basic representation; specific command structures might vary.
+ */
+export interface Command {
+  id: string; // Or another unique identifier for the command
+  // Other command-specific properties can be accessed via commandNode if needed
+  [key: string]: any; // Allow other properties
+}
+
+/**
  * Contextual information about the document being linted.
  */
 export interface DocumentContext {
@@ -101,10 +111,21 @@ export interface ILinterRule {
   getConfig(): LinterRuleConfig;
 
   /**
-   * Validates a target (signal or signal group) against this rule
-   * @param target The signal or signal group object to validate
-   * @param node The JSONC node for the target object
-   * @param context The document-wide context, including all pre-parsed IDs
+   * Validates an individual signal or signal group against this rule.
+   * @param target The signal or signal group to validate
+   * @param node The JSONC node for the target
+   * @param context Document-wide context
+   * @returns Lint result(s) or null if no issues are found
    */
-  validate(target: Signal | SignalGroup, node: jsonc.Node, context: DocumentContext): LintResult | null;
+  validateSignal?(target: Signal | SignalGroup, node: jsonc.Node, context: DocumentContext): LintResult | null | LintResult[];
+
+  /**
+   * Validates a command and its signals against this rule.
+   * @param command The parsed command object
+   * @param commandNode The JSONC node for the command
+   * @param signalsInCommand An array of signals belonging to this command, with their respective nodes
+   * @param context Document-wide context
+   * @returns Lint result(s) or null if no issues are found
+   */
+  validateCommand?(command: Command, commandNode: jsonc.Node, signalsInCommand: { signal: Signal, node: jsonc.Node }[], context: DocumentContext): LintResult | null | LintResult[];
 }
