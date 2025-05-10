@@ -11,6 +11,7 @@ import { UniqueSignalIdRule } from './rules/uniqueSignalIdRule';
 import { SignalPathSuggestionRule } from './rules/signalPathSuggestionRule';
 import { SignalSentenceCaseRule } from './rules/signalSentenceCaseRule';
 import { WheelSpeedNamingRule } from './rules/wheelSpeedNamingRule';
+import { AcronymAtStartOfSignalNameRule } from './rules/acronymAtStartOfSignalNameRule';
 
 /**
  * Registry that manages all linter rules
@@ -51,7 +52,8 @@ export class RuleRegistry {
       UniqueSignalIdRule,
       SignalPathSuggestionRule,
       SignalSentenceCaseRule,
-      WheelSpeedNamingRule
+      WheelSpeedNamingRule,
+      AcronymAtStartOfSignalNameRule
     ];
 
     // Instantiate each rule class
