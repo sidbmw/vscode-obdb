@@ -10,6 +10,7 @@ import { SignalBitOverlapRule } from './rules/signalBitOverlapRule';
 import { UniqueSignalIdRule } from './rules/uniqueSignalIdRule';
 import { SignalPathSuggestionRule } from './rules/signalPathSuggestionRule';
 import { SignalSentenceCaseRule } from './rules/signalSentenceCaseRule';
+import { WheelSpeedNamingRule } from './rules/wheelSpeedNamingRule';
 
 /**
  * Registry that manages all linter rules
@@ -49,7 +50,8 @@ export class RuleRegistry {
       SignalBitOverlapRule,
       UniqueSignalIdRule,
       SignalPathSuggestionRule,
-      SignalSentenceCaseRule
+      SignalSentenceCaseRule,
+      WheelSpeedNamingRule
     ];
 
     // Instantiate each rule class
