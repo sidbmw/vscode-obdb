@@ -12,6 +12,7 @@ import { SignalPathSuggestionRule } from './rules/signalPathSuggestionRule';
 import { SignalSentenceCaseRule } from './rules/signalSentenceCaseRule';
 import { WheelSpeedNamingRule } from './rules/wheelSpeedNamingRule';
 import { AcronymAtStartOfSignalNameRule } from './rules/acronymAtStartOfSignalNameRule';
+import { MapKeyNumericalRule } from './rules/mapKeyNumericalRule';
 
 /**
  * Registry that manages all linter rules
@@ -53,7 +54,8 @@ export class RuleRegistry {
       SignalPathSuggestionRule,
       SignalSentenceCaseRule,
       WheelSpeedNamingRule,
-      AcronymAtStartOfSignalNameRule
+      AcronymAtStartOfSignalNameRule,
+      MapKeyNumericalRule
     ];
 
     // Instantiate each rule class

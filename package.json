@@ -3,7 +3,7 @@
   "displayName": "OBDb tooling",
   "description": "OBDb signal editing tooling.",
   "publisher": "clutchengineering",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "repository": {
     "type": "git",
     "url": "https://github.com/OBDb/vscode-obdb.git"

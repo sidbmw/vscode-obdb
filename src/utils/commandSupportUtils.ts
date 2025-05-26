@@ -19,6 +19,16 @@ export function stripReceiveFilter(commandId: string): string {
 }
 
 /**
+ * Normalizes a command ID by removing any signal information after `:` or `|`
+ * @param commandId The command ID to normalize (e.g. 'DA0E.222612:TLX_GEAR_V2')
+ * @returns Normalized command ID without signal information (e.g. 'DA0E.222612')
+ */
+export function normalizeCommandId(commandId: string): string {
+  // Remove everything after ':' or '|'
+  return commandId.split(/[:|\|]/)[0];
+}
+
+/**
  * Gets all model years that explicitly list a command as unsupported
  * @param commandId The command ID to check (e.g. '7E0.2211BA')
  * @returns Array of model years where the command is explicitly unsupported
@@ -49,7 +59,17 @@ export async function getUnsupportedModelYearsForCommand(commandId: string): Pro
             const unsupportedCommands = Object.values(yamlContent.unsupported_commands_by_ecu as Record<string, string[]>)
               .flat() as string[];
 
-            if (unsupportedCommands.includes(commandId) || unsupportedCommands.includes(stripReceiveFilter(commandId))) {
+            // Normalize the input command ID
+            const normalizedCommandId = normalizeCommandId(commandId);
+            const normalizedStripFilter = normalizeCommandId(stripReceiveFilter(commandId));
+
+            // Check if any unsupported command matches when normalized
+            const isUnsupported = unsupportedCommands.some(cmd => {
+              const normalizedCmd = normalizeCommandId(cmd);
+              return normalizedCmd === normalizedCommandId || normalizedCmd === normalizedStripFilter;
+            });
+
+            if (isUnsupported) {
               unsupportedYears.push(year);
             }
           }
@@ -117,15 +137,14 @@ export async function getSupportedModelYearsForCommand(commandId: string): Promi
             if (yamlContent && yamlContent.supported_commands_by_ecu) {
               for (const ecuCommands of Object.values(yamlContent.supported_commands_by_ecu as Record<string, string[]>)) {
                 for (const cmd of ecuCommands as string[]) {
-                  const cmdParts = cmd.split(':');
-                  if (cmdParts.length > 0) {
-                    const mainCmdPart = cmdParts[0];
-                    const ecu = Object.keys(yamlContent.supported_commands_by_ecu).find(key => yamlContent.supported_commands_by_ecu[key] === ecuCommands);
-                    if (mainCmdPart === cmdPart || (ecu && `${ecu}.${mainCmdPart}` === commandId) || cmd.includes(cmdPart)) {
-                      supportedYears.push(year);
-                      foundInYear = true;
-                      break;
-                    }
+                  // Use the normalizeCommandId helper to get just the command part
+                  const normalizedCmd = normalizeCommandId(cmd);
+                  const ecu = Object.keys(yamlContent.supported_commands_by_ecu).find(key => yamlContent.supported_commands_by_ecu[key] === ecuCommands);
+
+                  if (normalizedCmd === cmdPart || (ecu && `${ecu}.${normalizedCmd}` === commandId) || normalizedCmd.includes(cmdPart)) {
+                    supportedYears.push(year);
+                    foundInYear = true;
+                    break;
                   }
                 }
                 if (foundInYear) break;
