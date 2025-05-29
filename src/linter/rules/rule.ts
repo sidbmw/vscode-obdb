@@ -128,4 +128,21 @@ export interface ILinterRule {
    * @returns Lint result(s) or null if no issues are found
    */
   validateCommand?(command: Command, commandNode: jsonc.Node, signalsInCommand: { signal: Signal, node: jsonc.Node }[], context: DocumentContext): LintResult | null | LintResult[];
+
+  /**
+   * Validates all commands in a command array against this rule.
+   * @param commandsNode The JSONC node for the commands array
+   * @param context Document-wide context
+   * @returns Lint result(s) or null if no issues are found
+   */
+  validateCommands?(commandsNode: jsonc.Node, context: DocumentContext): LintResult[] | null;
+
+  /**
+   * Validates the entire document at once. Use this for rules that need to process the entire
+   * document or need to track relationships between different parts of the document.
+   * @param rootNode The root JSONC node for the entire document
+   * @param context Document-wide context
+   * @returns Lint result(s) or null if no issues are found
+   */
+  validateDocument?(rootNode: jsonc.Node, context: DocumentContext): LintResult[] | null;
 }

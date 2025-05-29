@@ -11,8 +11,6 @@ export interface Signal {
 
 // Command structure from JSON files
 export interface Command {
-  id?: string;
-  name?: string;
   hdr?: string;
   cmd?: any;
   rax?: string;  // Response address extension

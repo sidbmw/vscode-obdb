@@ -13,6 +13,7 @@ import { SignalSentenceCaseRule } from './rules/signalSentenceCaseRule';
 import { WheelSpeedNamingRule } from './rules/wheelSpeedNamingRule';
 import { AcronymAtStartOfSignalNameRule } from './rules/acronymAtStartOfSignalNameRule';
 import { MapKeyNumericalRule } from './rules/mapKeyNumericalRule';
+import { CommandRaxDuplicationRule } from './rules/commandRaxDuplicationRule';
 
 /**
  * Registry that manages all linter rules
@@ -55,7 +56,8 @@ export class RuleRegistry {
       SignalSentenceCaseRule,
       WheelSpeedNamingRule,
       AcronymAtStartOfSignalNameRule,
-      MapKeyNumericalRule
+      MapKeyNumericalRule,
+      CommandRaxDuplicationRule
     ];
 
     // Instantiate each rule class

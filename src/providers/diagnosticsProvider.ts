@@ -89,6 +89,18 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
     const documentContext: DocumentContext = { allIds };
 
     const commandsArrayNode = findNodeAtLocation(rootNode, ["commands"]);
+    const signalGroupsArrayNode = findNodeAtLocation(rootNode, ["signalGroups"]);
+
+    // First run document-level linters that process the entire document at once
+    try {
+      const documentLintResults = signalLinter.lintDocument(rootNode, documentContext);
+      lintResults.push(...documentLintResults);
+      diagnostics.push(...signalLinter.toDiagnostics(document, documentLintResults));
+    } catch (err) {
+      console.error('Error running document-level linters:', err);
+    }
+
+    // Collect all signal IDs from commands
     if (commandsArrayNode && commandsArrayNode.type === 'array' && commandsArrayNode.children) {
       for (const commandNode of commandsArrayNode.children) {
         const signalsNode = findNodeAtLocation(commandNode, ["signals"]);
@@ -99,18 +111,18 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
               if (signalIdNode) {
                 const signalId = jsonc.getNodeValue(signalIdNode);
                 if (typeof signalId === 'string' && !allIds.has(signalId)) {
-                  allIds.set(signalId, signalNode); // Store the signal object node
+                  allIds.set(signalId, signalNode);
                 }
               }
             } catch (err) {
-              console.error('Error pre-parsing signal ID in commands:', err);
+              console.error('Error collecting signal ID from commands:', err);
             }
           }
         }
       }
     }
 
-    const signalGroupsArrayNode = findNodeAtLocation(rootNode, ["signalGroups"]);
+    // Collect all signal group IDs
     if (signalGroupsArrayNode && signalGroupsArrayNode.type === 'array' && signalGroupsArrayNode.children) {
       for (const signalGroupNode of signalGroupsArrayNode.children) {
         try {
@@ -118,18 +130,27 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
           if (groupIdNode) {
             const groupId = jsonc.getNodeValue(groupIdNode);
             if (typeof groupId === 'string' && !allIds.has(groupId)) {
-              allIds.set(groupId, signalGroupNode); // Store the signalGroup object node
+              allIds.set(groupId, signalGroupNode);
             }
           }
         } catch (err) {
-          console.error('Error pre-parsing signal group ID:', err);
+          console.error('Error collecting signal group ID:', err);
         }
       }
     }
 
-    // Iterate through each command in the array
+    // Now that we've collected all IDs, run all command array level linters
     if (commandsArrayNode && commandsArrayNode.type === 'array' && commandsArrayNode.children) {
-      for (const commandNode of commandsArrayNode.children || []) {
+      try {
+        const commandsLintResults = signalLinter.lintCommands(commandsArrayNode, documentContext);
+        lintResults.push(...commandsLintResults);
+        diagnostics.push(...signalLinter.toDiagnostics(document, commandsLintResults));
+      } catch (err) {
+        console.error('Error linting commands array:', err);
+      }
+
+      // Now process individual commands
+      for (const commandNode of commandsArrayNode.children) {
         const hdrNode = findNodeAtLocation(commandNode, ["hdr"]);
         const cmdNode = findNodeAtLocation(commandNode, ["cmd"]);
         const raxNode = findNodeAtLocation(commandNode, ["rax"]);
@@ -183,6 +204,31 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
               diagnostics.push(diagnostic);
             }
           }
+        }
+
+        // Perform command-level linting
+        try {
+          const command = jsonc.getNodeValue(commandNode);
+          // Extract signals from the command
+          const signalsInCommand: { signal: Signal, node: jsonc.Node }[] = [];
+
+          if (signalsNode && signalsNode.type === 'array' && signalsNode.children) {
+            for (const signalNode of signalsNode.children) {
+              try {
+                const signal = jsonc.getNodeValue(signalNode) as Signal;
+                signalsInCommand.push({ signal, node: signalNode });
+              } catch (err) {
+                console.error('Error extracting signal for command linting:', err);
+              }
+            }
+
+            // Process command-level linting
+            const commandLintResults = signalLinter.lintCommand(command, commandNode, signalsInCommand, documentContext);
+            lintResults.push(...commandLintResults);
+            diagnostics.push(...signalLinter.toDiagnostics(document, commandLintResults));
+          }
+        } catch (err) {
+          console.error('Error linting command:', err);
         }
 
         // Process signals linting within commands

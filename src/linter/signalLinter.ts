@@ -67,6 +67,46 @@ export class SignalLinter {
   }
 
   /**
+   * Lint all commands in a commands array against all enabled rules that support commands-level linting.
+   * @param commandsNode The JSONC node for the commands array
+   * @param context Document-wide context
+   */
+  public lintCommands(commandsNode: jsonc.Node, context: DocumentContext): LintResult[] {
+    const results: LintResult[] = [];
+    const enabledRules = this.ruleRegistry.getEnabledRules();
+
+    for (const rule of enabledRules) {
+      if (rule.validateCommands) {
+        const ruleResult = rule.validateCommands(commandsNode, context);
+        if (ruleResult) {
+          results.push(...ruleResult);
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Lint the entire document against all enabled rules that support document-level linting.
+   * @param rootNode The root JSONC node for the entire document
+   * @param context Document-wide context
+   */
+  public lintDocument(rootNode: jsonc.Node, context: DocumentContext): LintResult[] {
+    const results: LintResult[] = [];
+    const enabledRules = this.ruleRegistry.getEnabledRules();
+
+    for (const rule of enabledRules) {
+      if (rule.validateDocument) {
+        const ruleResult = rule.validateDocument(rootNode, context);
+        if (ruleResult) {
+          results.push(...ruleResult);
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
    * Get the last lint results
    */
   public getLastResults(): LintResult[] {

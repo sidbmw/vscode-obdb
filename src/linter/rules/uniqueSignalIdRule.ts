@@ -19,34 +19,81 @@ export class UniqueSignalIdRule implements ILinterRule {
   }
 
   /**
-   * Validates a signal or signal group ID against this rule using pre-parsed document context.
-   *
-   * @param target The signal or signal group object (must have an 'id' property)
-   * @param node The JSONC node for the entire signal or signal group object
-   * @param context The document-wide context containing all pre-parsed IDs
+   * Validates the entire document at once to check for duplicate signal IDs.
+   * @param rootNode The root JSONC node for the entire document
+   * @param context Document-wide context
+   * @returns Lint results or null if no issues are found
    */
-  public validateSignal(target: Signal | SignalGroup, node: jsonc.Node, context: DocumentContext): LintResult | null {
-    const idValue = target.id;
-
-    // Find the JSONC node for the 'id' property within the current object node for accurate diagnostic placement.
-    const idPropertyNode = jsonc.findNodeAtLocation(node, ['id']);
-    if (!idPropertyNode) {
-      // Should not happen if target.id is valid and node is the correct object node.
+  public validateDocument(rootNode: jsonc.Node, context: DocumentContext): LintResult[] | null {
+    if (!rootNode) {
       return null;
     }
 
-    const firstOccurrenceNode = context.allIds.get(idValue);
+    const results: LintResult[] = [];
+    const idMap = new Map<string, jsonc.Node>();
 
-    // If an entry for this ID exists in allIds, AND the node in allIds is *different*
-    // from the current object node, then the current node is a subsequent, duplicate occurrence.
-    if (firstOccurrenceNode && firstOccurrenceNode !== node) {
-      return {
-        ruleId: this.getConfig().id,
-        message: `ID \"${idValue}\" is not unique. Another signal or signal group in this file uses the same ID.`,
-        node: idPropertyNode, // Report error on the 'id' property of the duplicate.
-      };
+    // Process commands array first
+    const commandsNode = jsonc.findNodeAtLocation(rootNode, ['commands']);
+    if (commandsNode && commandsNode.type === 'array' && commandsNode.children) {
+      for (const commandNode of commandsNode.children) {
+        const signalsNode = jsonc.findNodeAtLocation(commandNode, ['signals']);
+        if (signalsNode && signalsNode.type === 'array' && signalsNode.children) {
+          for (const signalNode of signalsNode.children) {
+            this.checkForDuplicateId(signalNode, idMap, results);
+          }
+        }
+      }
     }
 
+    // Process signal groups array
+    const signalGroupsNode = jsonc.findNodeAtLocation(rootNode, ['signalGroups']);
+    if (signalGroupsNode && signalGroupsNode.type === 'array' && signalGroupsNode.children) {
+      for (const signalGroupNode of signalGroupsNode.children) {
+        this.checkForDuplicateId(signalGroupNode, idMap, results);
+      }
+    }
+
+    return results.length > 0 ? results : null;
+  }
+
+  /**
+   * Checks if a node has a duplicate ID and adds a result to the results array if it does.
+   * @param node The node to check
+   * @param idMap Map of previously seen IDs to their nodes
+   * @param results Array to add results to
+   */
+  private checkForDuplicateId(node: jsonc.Node, idMap: Map<string, jsonc.Node>, results: LintResult[]): void {
+    try {
+      const idNode = jsonc.findNodeAtLocation(node, ['id']);
+      if (!idNode) {
+        return;
+      }
+
+      const id = jsonc.getNodeValue(idNode);
+      if (typeof id !== 'string' || id.trim() === '') {
+        return;
+      }
+
+      // If we've seen this ID before, it's a duplicate
+      if (idMap.has(id)) {
+        results.push({
+          ruleId: this.getConfig().id,
+          message: `ID "${id}" is not unique. Another signal or signal group in this file uses the same ID.`,
+          node: idNode,
+        });
+      } else {
+        // Otherwise, record that we've seen this ID
+        idMap.set(id, node);
+      }
+    } catch (err) {
+      console.error('Error checking for duplicate ID:', err);
+    }
+  }
+
+  /**
+   * The original per-signal validation is now a no-op since we validate signals in bulk
+   */
+  public validateSignal(): LintResult | null {
     return null;
   }
 }
