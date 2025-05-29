@@ -1,5 +1,5 @@
 import * as jsonc from 'jsonc-parser';
-import { ILinterRule, LintResult, Signal, LintSeverity, LinterRuleConfig, Command, DocumentContext } from './rule';
+import { ILinterRule, LintResult, Signal, LintSeverity, LinterRuleConfig, Command } from './rule';
 
 /**
  * Rule that validates that commands with the same 'cmd' definition have 'rax' filters
@@ -22,10 +22,9 @@ export class CommandRaxDuplicationRule implements ILinterRule {
   /**
    * Validates the entire commands array to detect duplicate cmd values without unique rax filters
    * @param commandsNode The JSONC node for the commands array
-   * @param context Document-wide context
    * @returns Lint results or null if no issues are found
    */
-  public validateCommands(commandsNode: jsonc.Node, context: DocumentContext): LintResult[] | null {
+  public validateCommands(commandsNode: jsonc.Node): LintResult[] | null {
     if (!commandsNode || !commandsNode.children || commandsNode.children.length === 0) {
       return null;
     }

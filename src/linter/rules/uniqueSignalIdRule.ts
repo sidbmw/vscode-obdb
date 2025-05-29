@@ -1,5 +1,5 @@
 import * as jsonc from 'jsonc-parser';
-import { ILinterRule, LintResult, Signal, LintSeverity, LinterRuleConfig, DocumentContext, SignalGroup } from './rule';
+import { ILinterRule, LintResult, Signal, LintSeverity, LinterRuleConfig, SignalGroup } from './rule';
 
 /**
  * Rule that validates that signal and signal group IDs are unique across the entire file.
@@ -21,10 +21,9 @@ export class UniqueSignalIdRule implements ILinterRule {
   /**
    * Validates the entire document at once to check for duplicate signal IDs.
    * @param rootNode The root JSONC node for the entire document
-   * @param context Document-wide context
    * @returns Lint results or null if no issues are found
    */
-  public validateDocument(rootNode: jsonc.Node, context: DocumentContext): LintResult[] | null {
+  public validateDocument(rootNode: jsonc.Node): LintResult[] | null {
     if (!rootNode) {
       return null;
     }

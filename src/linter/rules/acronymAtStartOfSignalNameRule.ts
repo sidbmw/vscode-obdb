@@ -1,5 +1,5 @@
 import * as jsonc from 'jsonc-parser';
-import { ILinterRule, LinterRuleConfig, LintResult, LintSeverity, Signal, DocumentContext, SignalGroup } from './rule';
+import { ILinterRule, LinterRuleConfig, LintResult, LintSeverity, Signal, SignalGroup } from './rule';
 
 // Common automotive acronyms that should not start a signal name
 const COMMON_ACRONYMS = [

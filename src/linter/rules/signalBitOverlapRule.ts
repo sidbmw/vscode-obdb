@@ -1,5 +1,5 @@
 import * as jsonc from 'jsonc-parser';
-import { ILinterRule, LintResult, Signal, LintSeverity, LinterRuleConfig, Command, DocumentContext } from './rule';
+import { ILinterRule, LintResult, Signal, LintSeverity, LinterRuleConfig, Command } from './rule';
 
 /**
  * Rule that validates that signal bit ranges don't overlap within the same command
@@ -23,9 +23,8 @@ export class SignalBitOverlapRule implements ILinterRule {
    * @param command The command being validated (not directly used, but part of the interface)
    * @param commandNode The JSONC node for the command (not directly used, but part of the interface)
    * @param signalsInCommand An array of signals belonging to this command, with their respective nodes
-   * @param context Document-wide context (not directly used for this rule, but part of the interface)
    */
-  public validateCommand(command: Command, commandNode: jsonc.Node, signalsInCommand: { signal: Signal, node: jsonc.Node }[], context: DocumentContext): LintResult[] | null {
+  public validateCommand(command: Command, commandNode: jsonc.Node, signalsInCommand: { signal: Signal, node: jsonc.Node }[]): LintResult[] | null {
     const results: LintResult[] = [];
     if (signalsInCommand.length < 2) {
       return null; // Not enough signals to overlap

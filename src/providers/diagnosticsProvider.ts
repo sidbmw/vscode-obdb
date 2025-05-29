@@ -6,7 +6,7 @@ import * as jsonc from 'jsonc-parser';
 import { generateCommandId } from '../utils/commandParser';
 import { SignalLinter } from '../linter/signalLinter';
 import { SignalLinterCodeActionProvider } from './signalLinterCodeActionProvider';
-import { DocumentContext, Signal, SignalGroup } from '../linter/rules/rule';
+import { Signal, SignalGroup } from '../linter/rules/rule';
 
 let diagnosticCollection: vscode.DiagnosticCollection;
 const signalLinter = new SignalLinter();
@@ -86,14 +86,13 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
 
     // Pre-pass: Collect all signal and signal group IDs
     const allIds: Map<string, jsonc.Node> = new Map();
-    const documentContext: DocumentContext = { allIds };
 
     const commandsArrayNode = findNodeAtLocation(rootNode, ["commands"]);
     const signalGroupsArrayNode = findNodeAtLocation(rootNode, ["signalGroups"]);
 
     // First run document-level linters that process the entire document at once
     try {
-      const documentLintResults = signalLinter.lintDocument(rootNode, documentContext);
+      const documentLintResults = signalLinter.lintDocument(rootNode);
       lintResults.push(...documentLintResults);
       diagnostics.push(...signalLinter.toDiagnostics(document, documentLintResults));
     } catch (err) {
@@ -142,7 +141,7 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
     // Now that we've collected all IDs, run all command array level linters
     if (commandsArrayNode && commandsArrayNode.type === 'array' && commandsArrayNode.children) {
       try {
-        const commandsLintResults = signalLinter.lintCommands(commandsArrayNode, documentContext);
+        const commandsLintResults = signalLinter.lintCommands(commandsArrayNode);
         lintResults.push(...commandsLintResults);
         diagnostics.push(...signalLinter.toDiagnostics(document, commandsLintResults));
       } catch (err) {
@@ -223,7 +222,7 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
             }
 
             // Process command-level linting
-            const commandLintResults = signalLinter.lintCommand(command, commandNode, signalsInCommand, documentContext);
+            const commandLintResults = signalLinter.lintCommand(command, commandNode, signalsInCommand);
             lintResults.push(...commandLintResults);
             diagnostics.push(...signalLinter.toDiagnostics(document, commandLintResults));
           }
@@ -236,8 +235,8 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
           for (const signalNode of signalsNode.children) {
             try {
               const signal = jsonc.getNodeValue(signalNode) as Signal;
-              // Pass the documentContext to the linter
-              const signalLintResults = signalLinter.lintSignal(signal, signalNode, documentContext);
+              // Lint the signal
+              const signalLintResults = signalLinter.lintSignal(signal, signalNode);
               lintResults.push(...signalLintResults);
               diagnostics.push(...signalLinter.toDiagnostics(document, signalLintResults));
             } catch (err) {
@@ -253,9 +252,9 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
       for (const signalGroupNode of signalGroupsArrayNode.children) {
         try {
           const signalGroup = jsonc.getNodeValue(signalGroupNode) as SignalGroup;
-          // Pass the documentContext to the linter
+          // Lint the signal group
           // Note: Most rules might not apply to SignalGroup, but UniqueSignalIdRule will.
-          const groupLintResults = signalLinter.lintSignal(signalGroup, signalGroupNode, documentContext);
+          const groupLintResults = signalLinter.lintSignal(signalGroup, signalGroupNode);
           lintResults.push(...groupLintResults);
           diagnostics.push(...signalLinter.toDiagnostics(document, groupLintResults));
         } catch (err) {

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as jsonc from 'jsonc-parser';
 import { RuleRegistry } from './ruleRegistry';
-import { LintResult, Signal, SignalGroup, DocumentContext, Command, ILinterRule, getSeverity } from './rules/rule';
+import { LintResult, Signal, SignalGroup, Command, ILinterRule, getSeverity } from './rules/rule';
 
 /**
  * Main signal linter class
@@ -18,16 +18,15 @@ export class SignalLinter {
    * Lint an individual signal or signal group against all enabled rules that support signal-level linting.
    * @param target The signal or signal group to validate
    * @param node The JSONC node for the target
-   * @param context Document-wide context including all IDs
    */
-  public lintSignal(target: Signal | SignalGroup, node: jsonc.Node, context: DocumentContext): LintResult[] {
+  public lintSignal(target: Signal | SignalGroup, node: jsonc.Node): LintResult[] {
     const results: LintResult[] = [];
     const enabledRules = this.ruleRegistry.getEnabledRules();
 
     for (const rule of enabledRules) {
       if (rule.validateSignal) {
         // Pass the context to each rule
-        const ruleResult = rule.validateSignal(target, node, context);
+        const ruleResult = rule.validateSignal(target, node);
         if (ruleResult) {
           if (Array.isArray(ruleResult)) {
             results.push(...ruleResult);
@@ -45,15 +44,14 @@ export class SignalLinter {
    * @param command The parsed command object
    * @param commandNode The JSONC node for the command
    * @param signalsInCommand An array of signals belonging to this command, with their respective nodes
-   * @param context Document-wide context
    */
-  public lintCommand(command: Command, commandNode: jsonc.Node, signalsInCommand: { signal: Signal, node: jsonc.Node }[], context: DocumentContext): LintResult[] {
+  public lintCommand(command: Command, commandNode: jsonc.Node, signalsInCommand: { signal: Signal, node: jsonc.Node }[]): LintResult[] {
     const results: LintResult[] = [];
     const enabledRules = this.ruleRegistry.getEnabledRules();
 
     for (const rule of enabledRules) {
       if (rule.validateCommand) {
-        const ruleResult = rule.validateCommand(command, commandNode, signalsInCommand, context);
+        const ruleResult = rule.validateCommand(command, commandNode, signalsInCommand);
         if (ruleResult) {
           if (Array.isArray(ruleResult)) {
             results.push(...ruleResult);
@@ -69,15 +67,14 @@ export class SignalLinter {
   /**
    * Lint all commands in a commands array against all enabled rules that support commands-level linting.
    * @param commandsNode The JSONC node for the commands array
-   * @param context Document-wide context
    */
-  public lintCommands(commandsNode: jsonc.Node, context: DocumentContext): LintResult[] {
+  public lintCommands(commandsNode: jsonc.Node): LintResult[] {
     const results: LintResult[] = [];
     const enabledRules = this.ruleRegistry.getEnabledRules();
 
     for (const rule of enabledRules) {
       if (rule.validateCommands) {
-        const ruleResult = rule.validateCommands(commandsNode, context);
+        const ruleResult = rule.validateCommands(commandsNode);
         if (ruleResult) {
           results.push(...ruleResult);
         }
@@ -89,15 +86,14 @@ export class SignalLinter {
   /**
    * Lint the entire document against all enabled rules that support document-level linting.
    * @param rootNode The root JSONC node for the entire document
-   * @param context Document-wide context
    */
-  public lintDocument(rootNode: jsonc.Node, context: DocumentContext): LintResult[] {
+  public lintDocument(rootNode: jsonc.Node): LintResult[] {
     const results: LintResult[] = [];
     const enabledRules = this.ruleRegistry.getEnabledRules();
 
     for (const rule of enabledRules) {
       if (rule.validateDocument) {
-        const ruleResult = rule.validateDocument(rootNode, context);
+        const ruleResult = rule.validateDocument(rootNode);
         if (ruleResult) {
           results.push(...ruleResult);
         }

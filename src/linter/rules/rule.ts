@@ -34,16 +34,7 @@ export interface Command {
   [key: string]: any; // Allow other properties
 }
 
-/**
- * Contextual information about the document being linted.
- */
-export interface DocumentContext {
-  /**
-   * A map of all unique IDs (from signals and signal groups) found in the document
-   * to their first encountered jsonc.Node (the object node, not the ID property node).
-   */
-  allIds: Map<string, jsonc.Node>;
-}
+
 
 /**
  * Interface for linter rule validation results
@@ -114,35 +105,31 @@ export interface ILinterRule {
    * Validates an individual signal or signal group against this rule.
    * @param target The signal or signal group to validate
    * @param node The JSONC node for the target
-   * @param context Document-wide context
    * @returns Lint result(s) or null if no issues are found
    */
-  validateSignal?(target: Signal | SignalGroup, node: jsonc.Node, context: DocumentContext): LintResult | null | LintResult[];
+  validateSignal?(target: Signal | SignalGroup, node: jsonc.Node): LintResult | null | LintResult[];
 
   /**
    * Validates a command and its signals against this rule.
    * @param command The parsed command object
    * @param commandNode The JSONC node for the command
    * @param signalsInCommand An array of signals belonging to this command, with their respective nodes
-   * @param context Document-wide context
    * @returns Lint result(s) or null if no issues are found
    */
-  validateCommand?(command: Command, commandNode: jsonc.Node, signalsInCommand: { signal: Signal, node: jsonc.Node }[], context: DocumentContext): LintResult | null | LintResult[];
+  validateCommand?(command: Command, commandNode: jsonc.Node, signalsInCommand: { signal: Signal, node: jsonc.Node }[]): LintResult | null | LintResult[];
 
   /**
    * Validates all commands in a command array against this rule.
    * @param commandsNode The JSONC node for the commands array
-   * @param context Document-wide context
    * @returns Lint result(s) or null if no issues are found
    */
-  validateCommands?(commandsNode: jsonc.Node, context: DocumentContext): LintResult[] | null;
+  validateCommands?(commandsNode: jsonc.Node): LintResult[] | null;
 
   /**
    * Validates the entire document at once. Use this for rules that need to process the entire
    * document or need to track relationships between different parts of the document.
    * @param rootNode The root JSONC node for the entire document
-   * @param context Document-wide context
    * @returns Lint result(s) or null if no issues are found
    */
-  validateDocument?(rootNode: jsonc.Node, context: DocumentContext): LintResult[] | null;
+  validateDocument?(rootNode: jsonc.Node): LintResult[] | null;
 }
