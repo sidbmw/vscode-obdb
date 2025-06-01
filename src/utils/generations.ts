@@ -137,3 +137,53 @@ export async function groupModelYearsByGeneration(modelYears: string[]): Promise
 
     return result;
 }
+
+/**
+ * Group consecutive model years into ranges
+ * @param years Array of model years to group
+ * @returns String representation with consecutive years grouped into ranges
+ */
+export function formatYearsAsRanges(years: string[]): string {
+    if (!years || years.length === 0) {
+        return '';
+    }
+
+    // Convert to numbers and sort
+    const sortedYears = years.map(year => parseInt(year, 10))
+        .filter(year => !isNaN(year))
+        .sort((a, b) => a - b);
+
+    if (sortedYears.length === 0) {
+        return '';
+    }
+
+    const ranges: string[] = [];
+    let rangeStart = sortedYears[0];
+    let rangeEnd = rangeStart;
+
+    for (let i = 1; i < sortedYears.length; i++) {
+        const currentYear = sortedYears[i];
+
+        // If the current year is consecutive to the previous one, extend the range
+        if (currentYear === rangeEnd + 1) {
+            rangeEnd = currentYear;
+        } else {
+            // Otherwise, finish the current range and start a new one
+            if (rangeStart === rangeEnd) {
+                ranges.push(rangeStart.toString());
+            } else {
+                ranges.push(`${rangeStart}-${rangeEnd}`);
+            }
+            rangeStart = rangeEnd = currentYear;
+        }
+    }
+
+    // Add the last range
+    if (rangeStart === rangeEnd) {
+        ranges.push(rangeStart.toString());
+    } else {
+        ranges.push(`${rangeStart}-${rangeEnd}`);
+    }
+
+    return ranges.join(', ');
+}

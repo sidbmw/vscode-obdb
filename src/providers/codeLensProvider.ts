@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as jsonc from 'jsonc-parser';
 import { getSupportedModelYearsForCommand, getUnsupportedModelYearsForCommand } from '../utils/commandSupportUtils';
-import { groupModelYearsByGeneration } from '../utils/generations';
+import { groupModelYearsByGeneration, formatYearsAsRanges } from '../utils/generations';
 
 export class CommandCodeLensProvider implements vscode.CodeLensProvider {
   private onDidChangeCodeLensesEmitter: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
@@ -85,11 +85,11 @@ export class CommandCodeLensProvider implements vscode.CodeLensProvider {
                   title += 'No information available.';
                 } else {
                   if (supportedYears.length > 0) {
-                    title += `✅ Supported: ${supportedYears.join(', ')}`;
+                    title += `✅ Supported: ${formatYearsAsRanges(supportedYears)}`;
                   }
                   if (finalUnsupportedYears.length > 0) {
                     if (supportedYears.length > 0) title += ' | ';
-                    title += `❌ Unsupported: ${finalUnsupportedYears.join(', ')}`;
+                    title += `❌ Unsupported: ${formatYearsAsRanges(finalUnsupportedYears)}`;
                   }
                 }
 
