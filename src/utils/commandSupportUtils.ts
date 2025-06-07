@@ -4,6 +4,25 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 
 /**
+ * Loads YAML content with ECU keys forced to strings
+ */
+function loadCommandSupportYaml(content: string): any {
+  // Simple regex-based approach to quote ECU keys that look like hex/numeric
+  const processedContent = content.replace(
+    /^(\s+)([0-9A-Fa-f]{2,3}):\s*$/gm,
+    '$1"$2":'
+  );
+
+  try {
+    return yaml.load(processedContent);
+  } catch (error) {
+    // Fallback to original content if preprocessing causes issues
+    console.warn('Preprocessed YAML failed, falling back to original:', error);
+    return yaml.load(content);
+  }
+}
+
+/**
  * Strips the receive filter (middle part) from a command ID if present
  * @param commandId The command ID in format "header.response.command" or "header.command"
  * @returns Simplified command ID in format "header.command"
@@ -53,7 +72,7 @@ export async function getUnsupportedModelYearsForCommand(commandId: string): Pro
         const supportFilePath = path.join(yearPath, 'command_support.yaml');
         try {
           const content = await fs.promises.readFile(supportFilePath, 'utf-8');
-          const yamlContent = yaml.load(content) as any;
+          const yamlContent = loadCommandSupportYaml(content);
 
           if (yamlContent && yamlContent.unsupported_commands_by_ecu) {
             const unsupportedCommands = Object.values(yamlContent.unsupported_commands_by_ecu as Record<string, string[]>)
@@ -74,9 +93,11 @@ export async function getUnsupportedModelYearsForCommand(commandId: string): Pro
             }
           }
         } catch (err) {
+          console.error(`Error reading or parsing command support file for year ${year}:`, err);
           // It's ok if the support file doesn't exist or fails to parse
         }
       } catch (statErr) {
+        console.error(`Error stating path for year ${year}:`, statErr);
         // Error stating the year path, skip
       }
     }
@@ -132,7 +153,7 @@ export async function getSupportedModelYearsForCommand(commandId: string): Promi
           const supportFilePath = path.join(yearPath, 'command_support.yaml');
           try {
             const content = await fs.promises.readFile(supportFilePath, 'utf-8');
-            const yamlContent = yaml.load(content) as any;
+            const yamlContent = loadCommandSupportYaml(content);
 
             if (yamlContent && yamlContent.supported_commands_by_ecu) {
               for (const ecuCommands of Object.values(yamlContent.supported_commands_by_ecu as Record<string, string[]>)) {
