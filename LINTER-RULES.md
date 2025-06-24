@@ -147,7 +147,7 @@ private loadAllRules(): void {
   // Create instances of all rule classes
   // When adding a new rule, just add it to this list
   const ruleClasses = [
-    OdometerIdNamingRule,
+    ConsolidatedNamingRule,
     SignalNamingConventionRule,
     SuggestedMetricValidationRule,
     TemperatureUnitRule  // Add your new rule here
@@ -253,8 +253,11 @@ After implementing your rule, you should test it to ensure it works correctly:
 
 For reference, the project includes several example rules:
 
-1. **OdometerIdNamingRule**: Validates that signals with suggestedMetric "odometer" have "ODO" in the ID
-2. **SignalNamingConventionRule**: Checks that signal IDs use consistent naming conventions
+1. **ConsolidatedNamingRule**: Validates naming conventions for wheel speed, odometer, and engine oil pressure signals
+   - Wheel speed signals: Enforces "[Front/Rear] [left/right] wheel speed" format
+   - Odometer signals: Ensures signals with suggestedMetric "odometer" have "ODO" (not "ODOMETER") in the ID
+   - Engine oil pressure signals: Ensures signals with "engine oil pressure" in the name have "EOP" in the ID
+2. **SignalNamingConventionRule**: Checks that signal IDs use consistent naming conventions (SNAKE_CASE)
 3. **SuggestedMetricValidationRule**: Ensures signals with suggested metrics use appropriate units
 
 Study these examples to understand the different validation patterns and techniques.

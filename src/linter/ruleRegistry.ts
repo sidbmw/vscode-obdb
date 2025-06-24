@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { ILinterRule, LinterRuleConfig } from './rules/rule';
 
 // Import all rule classes directly
-import { OdometerIdNamingRule } from './rules/odometerIdNamingRule';
+import { ConsolidatedNamingRule } from './rules/consolidatedNamingRule';
 import { SignalNamingConventionRule } from './rules/signalNamingConventionRule';
 import { SuggestedMetricValidationRule } from './rules/suggestedMetricValidationRule';
 import { FormulaRangeValidationRule } from './rules/formulaRangeValidationRule';
@@ -10,7 +10,6 @@ import { SignalBitOverlapRule } from './rules/signalBitOverlapRule';
 import { UniqueSignalIdRule } from './rules/uniqueSignalIdRule';
 import { SignalPathSuggestionRule } from './rules/signalPathSuggestionRule';
 import { SignalSentenceCaseRule } from './rules/signalSentenceCaseRule';
-import { WheelSpeedNamingRule } from './rules/wheelSpeedNamingRule';
 import { AcronymAtStartOfSignalNameRule } from './rules/acronymAtStartOfSignalNameRule';
 import { MapKeyNumericalRule } from './rules/mapKeyNumericalRule';
 import { CommandRaxDuplicationRule } from './rules/commandRaxDuplicationRule';
@@ -46,7 +45,7 @@ export class RuleRegistry {
     // Create instances of all rule classes
     // When adding a new rule, just add it to this list
     const ruleClasses = [
-      OdometerIdNamingRule,
+      ConsolidatedNamingRule,
       SignalNamingConventionRule,
       SuggestedMetricValidationRule,
       FormulaRangeValidationRule,
@@ -54,7 +53,6 @@ export class RuleRegistry {
       UniqueSignalIdRule,
       SignalPathSuggestionRule,
       SignalSentenceCaseRule,
-      WheelSpeedNamingRule,
       AcronymAtStartOfSignalNameRule,
       MapKeyNumericalRule,
       CommandRaxDuplicationRule
