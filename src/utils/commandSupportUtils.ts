@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { generateCommandIdFromDefinition, ID_PROPERTY_DIVIDER } from './commandParser';
 
 /**
  * Loads YAML content with ECU keys forced to strings
@@ -38,13 +39,23 @@ export function stripReceiveFilter(commandId: string): string {
 }
 
 /**
- * Normalizes a command ID by removing any signal information after `:` or `|`
- * @param commandId The command ID to normalize (e.g. 'DA0E.222612:TLX_GEAR_V2')
- * @returns Normalized command ID without signal information (e.g. 'DA0E.222612')
+ * Normalizes a command ID by removing any signal information after `:` or additional properties after `|`
+ * @param commandId The command ID to normalize (e.g. 'DA0E.222612:TLX_GEAR_V2' or 'DA0E.222612|t=FF')
+ * @returns Normalized command ID without signal information or additional properties
  */
 export function normalizeCommandId(commandId: string): string {
-  // Remove everything after ':' or '|'
+  // Remove everything after ':' (signal info) or '|' (additional properties)
   return commandId.split(/[:|\|]/)[0];
+}
+
+/**
+ * Generates a normalized command ID from a command definition object
+ * @param command The command object
+ * @returns Generated and normalized command ID
+ */
+export function generateNormalizedCommandId(command: any): string {
+  const fullId = generateCommandIdFromDefinition(command);
+  return normalizeCommandId(fullId);
 }
 
 /**

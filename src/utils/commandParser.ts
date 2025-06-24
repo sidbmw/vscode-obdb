@@ -194,6 +194,264 @@ export async function getSampleCommandResponses(commandId: string): Promise<Arra
 }
 
 /**
+ * Car protocol strategy enum
+ */
+export enum CarProtocolStrategy {
+  iso15765_4_11bit = 'iso15765_4_11bit',
+  iso15765_4_29bit = 'iso15765_4_29bit',
+  iso9141_2 = 'iso9141_2'
+}
+
+/**
+ * Filter interface for command filtering
+ */
+export interface Filter {
+  toIDString: string;
+}
+
+/**
+ * Parameter interface for command parameters
+ */
+export interface Parameter {
+  asMessage: string;
+}
+
+/**
+ * The property divider used in command IDs
+ */
+export const ID_PROPERTY_DIVIDER = '|';
+
+/**
+ * Creates a command ID from a command definition.
+ * @param headerAsString The header as a string
+ * @param receiveAddressAsString Optional receive address as string
+ * @param parameter The parameter object with asMessage property
+ * @param filter Optional filter object
+ * @param timeout Optional timeout value
+ * @param extendedAddress Optional extended address
+ * @param testerAddress Optional tester address
+ * @param forceFlowControlResponse Whether to force flow control response
+ * @param carProtocolStrategy Optional car protocol strategy
+ * @param canPriority Optional CAN priority
+ * @returns The generated command ID
+ */
+export function createCommandID(
+  headerAsString: string,
+  receiveAddressAsString?: string,
+  parameter?: Parameter,
+  filter?: Filter,
+  timeout?: number,
+  extendedAddress?: number,
+  testerAddress?: number,
+  forceFlowControlResponse: boolean = false,
+  carProtocolStrategy?: CarProtocolStrategy,
+  canPriority?: number
+): string {
+  let id = headerAsString + '.';
+
+  if (receiveAddressAsString) {
+    id += receiveAddressAsString + '.';
+  }
+
+  if (parameter) {
+    id += parameter.asMessage;
+  }
+
+  // Add additional properties in a compact format
+  const propertiesString = formatPropertiesForID(
+    filter,
+    timeout,
+    extendedAddress,
+    testerAddress,
+    forceFlowControlResponse,
+    carProtocolStrategy,
+    canPriority
+  );
+
+  if (propertiesString.length > 0) {
+    id += ID_PROPERTY_DIVIDER + propertiesString;
+  }
+
+  return id;
+}
+
+/**
+ * Formats additional properties for the command ID
+ * @param filter Optional filter object
+ * @param timeout Optional timeout value
+ * @param extendedAddress Optional extended address
+ * @param testerAddress Optional tester address
+ * @param forceFlowControlResponse Whether to force flow control response
+ * @param carProtocolStrategy Optional car protocol strategy
+ * @param canPriority Optional CAN priority
+ * @returns Formatted properties string
+ */
+function formatPropertiesForID(
+  filter?: Filter,
+  timeout?: number,
+  extendedAddress?: number,
+  testerAddress?: number,
+  forceFlowControlResponse: boolean = false,
+  carProtocolStrategy?: CarProtocolStrategy,
+  canPriority?: number
+): string {
+  const parts: string[] = [];
+
+  if (timeout !== undefined) {
+    parts.push(`t=${timeout.toString(16).toUpperCase().padStart(2, '0')}`);
+  }
+
+  if (extendedAddress !== undefined) {
+    parts.push(`e=${extendedAddress.toString(16).toUpperCase().padStart(2, '0')}`);
+  }
+
+  if (testerAddress !== undefined) {
+    parts.push(`ta=${testerAddress.toString(16).toUpperCase().padStart(2, '0')}`);
+  }
+
+  if (forceFlowControlResponse) {
+    parts.push('fc=1');
+  }
+
+  if (carProtocolStrategy === CarProtocolStrategy.iso9141_2) {
+    parts.push('p=9141-2');
+  }
+
+  if (canPriority !== undefined) {
+    parts.push(`c=${canPriority.toString(16).toUpperCase().padStart(2, '0')}`);
+  }
+
+  if (filter) {
+    parts.push('f=' + filter.toIDString);
+  }
+
+  return parts.join(',');
+}
+
+/**
+ * Formats header value as string based on protocol strategy and value
+ * @param header The header value
+ * @param carProtocolStrategy Optional car protocol strategy
+ * @returns Formatted header string
+ */
+function formatHeaderAsString(header: number, carProtocolStrategy?: CarProtocolStrategy): string {
+  if (carProtocolStrategy === CarProtocolStrategy.iso15765_4_11bit) {
+    return header.toString(16).toUpperCase().padStart(3, '0');
+  } else if (carProtocolStrategy === CarProtocolStrategy.iso15765_4_29bit) {
+    return header.toString(16).toUpperCase().padStart(4, '0');
+  } else if (carProtocolStrategy === CarProtocolStrategy.iso9141_2) {
+    return header.toString(16).toUpperCase().padStart(4, '0');
+  } else if (header <= 0xFFF) {
+    return header.toString(16).toUpperCase().padStart(3, '0');
+  } else {
+    return header.toString(16).toUpperCase().padStart(4, '0');
+  }
+}
+
+/**
+ * Formats receive address as string based on protocol strategy and mask
+ * @param receiveAddress The receive address value
+ * @param receiveMask The receive mask value
+ * @param carProtocolStrategy Optional car protocol strategy
+ * @returns Formatted receive address string or undefined
+ */
+function formatReceiveAddressAsString(
+  receiveAddress?: number,
+  receiveMask?: number,
+  carProtocolStrategy?: CarProtocolStrategy
+): string | undefined {
+  if (receiveAddress === undefined) {
+    return undefined;
+  }
+
+  if (carProtocolStrategy === CarProtocolStrategy.iso15765_4_11bit) {
+    return receiveAddress.toString(16).toUpperCase().padStart(3, '0');
+  } else if (carProtocolStrategy === CarProtocolStrategy.iso15765_4_29bit) {
+    if ((receiveMask || 0) <= 0xFF) {
+      return receiveAddress.toString(16).toUpperCase().padStart(2, '0');
+    } else if ((receiveMask || 0) <= 0xFFFF) {
+      return receiveAddress.toString(16).toUpperCase().padStart(4, '0');
+    } else {
+      return receiveAddress.toString(16).toUpperCase().padStart(6, '0');
+    }
+  } else if (carProtocolStrategy === CarProtocolStrategy.iso9141_2) {
+    return receiveAddress.toString(16).toUpperCase().padStart(2, '0');
+  } else if ((receiveMask || 0) <= 0xFF) {
+    return receiveAddress.toString(16).toUpperCase().padStart(2, '0');
+  } else if ((receiveMask || 0) <= 0xFFF) {
+    return receiveAddress.toString(16).toUpperCase().padStart(3, '0');
+  } else {
+    return receiveAddress.toString(16).toUpperCase().padStart(4, '0');
+  }
+}
+
+/**
+ * Generates a command ID from a command definition object using the correct coding keys
+ * @param command The command object
+ * @returns Generated command ID string
+ */
+export function generateCommandIdFromDefinition(command: any): string {
+  // Extract header - convert to number if it's a string
+  const headerValue = typeof command.hdr === 'string'
+    ? parseInt(command.hdr, 16)
+    : (command.hdr || 0x7E0);
+
+  // Extract receive address
+  const receiveAddress = command.rax;
+  const receiveMask = command.receive?.mask || command.receiveAddressMask;
+
+  // Extract car protocol strategy
+  const carProtocolStrategy = command.proto as CarProtocolStrategy;
+
+  // Format header and receive address
+  const headerAsString = formatHeaderAsString(headerValue, carProtocolStrategy);
+  const receiveAddressAsString = formatReceiveAddressAsString(
+    receiveAddress,
+    receiveMask,
+    carProtocolStrategy
+  );
+
+  // Create parameter object from "cmd" key
+  let parameter: Parameter | undefined;
+  if (command.cmd !== undefined) {
+    let cmdMessage: string;
+    if (typeof command.cmd === 'object') {
+      if (Object.keys(command.cmd).length === 1) {
+        const key = Object.keys(command.cmd)[0];
+        const value = command.cmd[key];
+        cmdMessage = `${key}${value}`;
+      } else {
+        cmdMessage = JSON.stringify(command.cmd).replace(/[:\s"{}]/g, '');
+      }
+    } else {
+      cmdMessage = String(command.cmd).replace(/[:\s]/g, '');
+    }
+    parameter = { asMessage: cmdMessage };
+  }
+
+  // Extract other properties using correct coding keys
+  const filter = command.filter as Filter;
+  const timeout = command.tmo;
+  const extendedAddress = command.eax;
+  const testerAddress = command.tst;
+  const forceFlowControlResponse = command.fcm1 || false;
+  const canPriority = command.pri;
+
+  return createCommandID(
+    headerAsString,
+    receiveAddressAsString,
+    parameter,
+    filter,
+    timeout,
+    extendedAddress,
+    testerAddress,
+    forceFlowControlResponse,
+    carProtocolStrategy,
+    canPriority
+  );
+}
+
+/**
  * Generates a command ID in the format used by command_support.yaml files
  * Takes into account the RAX property when present
  * Format with rax: hdr.rax.cmd (e.g., "7B3.7BB.220100")

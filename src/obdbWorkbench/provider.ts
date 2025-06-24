@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isPositionInCommand, getSampleCommandResponses, generateCommandId } from '../utils/commandParser';
+import { isPositionInCommand, getSampleCommandResponses, generateCommandId, generateCommandIdFromDefinition } from '../utils/commandParser';
 import { extractSignals } from './signalExtractor';
 import { generateBitmapHtml } from './htmlGenerator';
 import { getWebviewContent } from './webviewContent';
@@ -222,10 +222,10 @@ export async function updateVisualizationPanel(command: any) {
     ? Object.entries(command.cmd).map(([k, v]) => `${k}: ${v}`).join(', ')
     : command.cmd?.toString() || '';
 
-  // Use shared generateCommandId function to create the full command ID
+  // Use the new generateCommandIdFromDefinition function to create the full command ID
   let fullCommandId = commandId;
-  if (!fullCommandId && commandHeader) {
-    fullCommandId = generateCommandId(commandHeader, commandCmdValue, commandRax);
+  if (!fullCommandId) {
+    fullCommandId = generateCommandIdFromDefinition(command);
   }
 
   // Fetch sample responses if we have a command ID
