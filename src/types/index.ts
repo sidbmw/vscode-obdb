@@ -9,7 +9,9 @@ export enum CarProtocolStrategy {
 
 // Filter interface for command filtering
 export interface Filter {
-  toIDString: string;
+  from?: number;
+  to?: number;
+  years?: number[];
 }
 
 // Parameter interface for command parameters

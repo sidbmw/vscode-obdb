@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { Command, CommandPositionResult, Signal } from '../types';
+import { Command, CommandPositionResult, Signal, Filter } from '../types';
 
 /**
  * Checks if a position in a document is inside a command definition
@@ -203,13 +203,6 @@ export enum CarProtocolStrategy {
 }
 
 /**
- * Filter interface for command filtering
- */
-export interface Filter {
-  toIDString: string;
-}
-
-/**
  * Parameter interface for command parameters
  */
 export interface Parameter {
@@ -322,7 +315,7 @@ function formatPropertiesForID(
   }
 
   if (filter) {
-    parts.push('f=' + filter.toIDString);
+    parts.push('f=' + filterToIDString(filter));
   }
 
   return parts.join(',');
@@ -485,4 +478,31 @@ export function generateCommandId(header: string, cmd: any, rax?: string): strin
     // Original format: hdr.cmd
     return `${header}.${cmdPart}`;
   }
+}
+
+/**
+ * Converts a filter object to an ID string representation
+ * @param filter The filter object with from, to, and years properties
+ * @returns The ID string representation of the filter
+ */
+export function filterToIDString(filter: Filter): string {
+  const stringParts: string[] = [];
+
+  if (filter.from !== undefined && filter.to !== undefined && filter.from < filter.to) {
+    stringParts.push(String(filter.from) + "-" + String(filter.to));
+  } else {
+    if (filter.from !== undefined) {
+      stringParts.push(String(filter.from) + "-");
+    }
+    if (filter.to !== undefined) {
+      stringParts.push("-" + String(filter.to));
+    }
+  }
+
+  if (filter.years && filter.years.length > 0) {
+    const sortedYears = [...filter.years].sort((a, b) => a - b);
+    stringParts.push(...sortedYears.map(year => String(year)));
+  }
+
+  return stringParts.join(';');
 }
