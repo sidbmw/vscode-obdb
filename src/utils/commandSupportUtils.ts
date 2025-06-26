@@ -39,13 +39,13 @@ export function stripReceiveFilter(commandId: string): string {
 }
 
 /**
- * Normalizes a command ID by removing any signal information after `:` or additional properties after `|`
- * @param commandId The command ID to normalize (e.g. 'DA0E.222612:TLX_GEAR_V2' or 'DA0E.222612|t=FF')
+ * Normalizes a command ID by removing any signal information after `:`
+ * @param commandId The command ID to normalize (e.g. 'DA0E.222612:TLX_GEAR_V2')
  * @returns Normalized command ID without signal information or additional properties
  */
 export function normalizeCommandId(commandId: string): string {
-  // Remove everything after ':' (signal info) or '|' (additional properties)
-  return commandId.split(/[:|\|]/)[0];
+  // Remove everything after ':' (signal info)
+  return commandId.split(/[:]/)[0];
 }
 
 /**

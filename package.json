@@ -3,7 +3,7 @@
   "displayName": "OBDb tooling",
   "description": "OBDb signal editing tooling.",
   "publisher": "clutchengineering",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "repository": {
     "type": "git",
     "url": "https://github.com/OBDb/vscode-obdb.git"
@@ -74,7 +74,9 @@
     ],
     "jsonValidation": [
       {
-        "fileMatch": ["signalsets/v3/*.json"],
+        "fileMatch": [
+          "signalsets/v3/*.json"
+        ],
         "url": "https://raw.githubusercontent.com/OBDb/.schemas/refs/heads/main/signals.json"
       }
     ]
@@ -92,7 +94,9 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
+    "@types/fast-levenshtein": "^0.0.4",
     "canvas": "^3.1.0",
+    "fast-levenshtein": "^3.0.0",
     "js-yaml": "^4.1.0",
     "jsonc-parser": "^3.2.0",
     "yaml": "^2.3.4"
