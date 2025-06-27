@@ -118,6 +118,61 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  // Register command for optimizing debug filters
+  const optimizeDebugFilterCommand = vscode.commands.registerCommand('obdb.optimizeDebugFilter', async (args: {
+    documentUri: string;
+    commandRange: vscode.Range;
+    optimizedFilter: any;
+  }) => {
+    try {
+      const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(args.documentUri));
+      const editor = await vscode.window.showTextDocument(document);
+
+      // Get the command object text
+      let commandText = document.getText(args.commandRange);
+
+      if (args.optimizedFilter === undefined) {
+        // Remove the debug filter entirely
+        let modifiedText = commandText;
+
+        // Remove 'dbgfilter' property with various formatting possibilities
+        modifiedText = modifiedText.replace(/,\s*"dbgfilter"\s*:\s*\{[^}]*\}(?=\s*[,}])/g, '');
+        modifiedText = modifiedText.replace(/"dbgfilter"\s*:\s*\{[^}]*\}\s*,/g, '');
+
+        await editor.edit(editBuilder => {
+          editBuilder.replace(args.commandRange, modifiedText);
+        });
+
+        vscode.window.showInformationMessage('Debug filter removed - all years are supported');
+      } else {
+        // Update the debug filter with optimized version
+        let modifiedText = commandText;
+
+        // Format the optimized filter with spaces around braces to match style
+        const formatDebugFilter = (filter: any): string => {
+          const parts: string[] = [];
+          if (filter.to !== undefined) parts.push(`"to": ${filter.to}`);
+          if (filter.years !== undefined) parts.push(`"years": [${filter.years.join(', ')}]`);
+          if (filter.from !== undefined) parts.push(`"from": ${filter.from}`);
+          return `{ ${parts.join(', ')} }`;
+        };
+
+        const optimizedFilterJson = formatDebugFilter(args.optimizedFilter);
+
+        // Replace the existing dbgfilter
+        modifiedText = modifiedText.replace(/"dbgfilter"\s*:\s*\{[^}]*\}/g, `"dbgfilter": ${optimizedFilterJson}`);
+
+        await editor.edit(editBuilder => {
+          editBuilder.replace(args.commandRange, modifiedText);
+        });
+
+        vscode.window.showInformationMessage('Debug filter optimized - removed supported years');
+      }
+    } catch (error) {
+      vscode.window.showErrorMessage(`Failed to optimize debug filter: ${error}`);
+    }
+  });
+
   // Register test commands for running and debugging tests
   const testCommands = registerTestCommands(context);
   console.log('Registered commands for running and debugging tests');
@@ -158,12 +213,12 @@ export function activate(context: vscode.ExtensionContext) {
     ...definitionProvider,
     codeLensProvider, // Added provider to subscriptions
     applyDebugFilterCommand,
+    optimizeDebugFilterCommand,
     ...testCommands,
     testExplorer,
     testExecutionSubscription,
     autoShowDisposable,
-    testDiagnosticCollection,
-    applyDebugFilterCommand // Add the debug filter command to subscriptions
+    testDiagnosticCollection
   );
 }
 
