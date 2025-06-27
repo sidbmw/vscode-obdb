@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { generateCommandIdFromDefinition, ID_PROPERTY_DIVIDER } from './commandParser';
+import { Generation, getGenerations } from './generations';
 
 /**
  * Loads YAML content with ECU keys forced to strings
@@ -195,4 +196,98 @@ export async function getSupportedModelYearsForCommand(commandId: string): Promi
   }
 
   return supportedYears;
+}
+
+/**
+ * Interface for debug filter suggestion
+ */
+export interface DebugFilter {
+  to?: number;
+  from?: number;
+  years?: number[];
+}
+
+/**
+ * Generates a debug filter suggestion based on vehicle generation and command support
+ * @param supportedYears Array of years the command is known to be supported
+ * @param vehicleGeneration The vehicle's generation information
+ * @returns Debug filter object or null if no filter is needed
+ */
+export async function generateDebugFilterSuggestion(
+  supportedYears: string[],
+  vehicleGeneration: Generation | null
+): Promise<DebugFilter | null> {
+  if (!vehicleGeneration || supportedYears.length === 0) {
+    return null;
+  }
+
+  const supportedYearNumbers = supportedYears.map(year => parseInt(year, 10)).filter(year => !isNaN(year));
+  if (supportedYearNumbers.length === 0) {
+    return null;
+  }
+
+  const genStart = vehicleGeneration.start_year;
+  const genEnd = vehicleGeneration.end_year || new Date().getFullYear() + 5; // Use current year + 5 if no end year
+
+  // Generate the full range of generation years
+  const generationYears: number[] = [];
+  for (let year = genStart; year <= genEnd; year++) {
+    generationYears.push(year);
+  }
+
+  // Find unsupported years within the generation range
+  const unsupportedYears = generationYears.filter(year => !supportedYearNumbers.includes(year));
+
+  if (unsupportedYears.length === 0) {
+    return null; // No filter needed if all years are supported
+  }
+
+  const filter: DebugFilter = {};
+
+  // Check for consecutive ranges at the beginning (to)
+  let toYear: number | undefined;
+  for (let i = 0; i < unsupportedYears.length; i++) {
+    if (unsupportedYears[i] === genStart + i) {
+      toYear = unsupportedYears[i];
+    } else {
+      break;
+    }
+  }
+
+  // Check for consecutive ranges at the end (from)
+  let fromYear: number | undefined;
+  for (let i = unsupportedYears.length - 1; i >= 0; i--) {
+    const expectedYear = genEnd - (unsupportedYears.length - 1 - i);
+    if (unsupportedYears[i] === expectedYear) {
+      fromYear = unsupportedYears[i];
+    } else {
+      break;
+    }
+  }
+
+  // Individual years that don't fit into ranges
+  const individualYears = unsupportedYears.filter(year => {
+    const isInToRange = toYear !== undefined && year <= toYear;
+    const isInFromRange = fromYear !== undefined && year >= fromYear;
+    return !isInToRange && !isInFromRange;
+  });
+
+  if (toYear !== undefined) {
+    filter.to = toYear;
+  }
+
+  if (fromYear !== undefined) {
+    filter.from = fromYear;
+  }
+
+  if (individualYears.length > 0) {
+    filter.years = individualYears;
+  }
+
+  // Return null if the filter would be empty
+  if (Object.keys(filter).length === 0) {
+    return null;
+  }
+
+  return filter;
 }

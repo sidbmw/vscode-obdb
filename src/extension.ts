@@ -45,6 +45,79 @@ export function activate(context: vscode.ExtensionContext) {
   const codeLensProvider = createCodeLensProvider(); // Added provider
   console.log('Registered CodeLens provider for JSON command files');
 
+  // Register command for applying debug filters
+  const applyDebugFilterCommand = vscode.commands.registerCommand('obdb.applyDebugFilter', async (args: {
+    documentUri: string;
+    commandRange: vscode.Range;
+    debugFilter: any;
+  }) => {
+    try {
+      const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(args.documentUri));
+      const editor = await vscode.window.showTextDocument(document);      // Get the command object text
+      let commandText = document.getText(args.commandRange);
+
+      // Apply edits to preserve formatting
+      let modifiedText = commandText;
+
+      // Remove 'dbg: true' if it exists (with various formatting possibilities)
+      // Handle different cases: ", "dbg": true" or ""dbg": true," or just ""dbg": true"
+      modifiedText = modifiedText.replace(/,\s*"dbg"\s*:\s*true(?=\s*[,}])/g, '');
+      modifiedText = modifiedText.replace(/"dbg"\s*:\s*true\s*,/g, '');
+
+      // Format the debug filter with spaces around braces to match style
+      const formatDebugFilter = (filter: any): string => {
+        const parts: string[] = [];
+        if (filter.to !== undefined) parts.push(`"to": ${filter.to}`);
+        if (filter.years !== undefined) parts.push(`"years": [${filter.years.join(', ')}]`);
+        if (filter.from !== undefined) parts.push(`"from": ${filter.from}`);
+        return `{ ${parts.join(', ')} }`;
+      };
+
+      const debugFilterJson = formatDebugFilter(args.debugFilter);
+
+      // Find where to insert the dbgfilter - after command properties but before signals
+      // Look for the "signals" property and insert before it
+      const signalsMatch = modifiedText.match(/,\s*"signals"\s*:/);
+
+      if (signalsMatch && signalsMatch.index !== undefined) {
+        // Insert before the "signals" property
+        const insertPosition = signalsMatch.index;
+        const beforeSignals = modifiedText.substring(0, insertPosition);
+        const fromSignals = modifiedText.substring(insertPosition);
+
+        modifiedText = beforeSignals + `, "dbgfilter": ${debugFilterJson}` + fromSignals;
+      } else {
+        // Fallback: insert before the closing brace if no signals found
+        const closingBraceIndex = modifiedText.lastIndexOf('}');
+        if (closingBraceIndex === -1) {
+          vscode.window.showErrorMessage('Could not find closing brace in command object');
+          return;
+        }
+
+        // Check if there's already content before the closing brace
+        const beforeClosingBrace = modifiedText.substring(0, closingBraceIndex).trim();
+        const needsComma = beforeClosingBrace.endsWith('"') || beforeClosingBrace.endsWith('}') || beforeClosingBrace.endsWith(']');
+
+        // Format the debug filter with proper comma
+        const formattedDebugFilter = `${needsComma ? ', ' : ''}"dbgfilter": ${debugFilterJson}`;
+
+        // Insert the debug filter
+        const beforeBrace = modifiedText.substring(0, closingBraceIndex);
+        const afterBrace = modifiedText.substring(closingBraceIndex);
+        modifiedText = beforeBrace + formattedDebugFilter + afterBrace;
+      }
+
+      // Replace the command in the document
+      await editor.edit(editBuilder => {
+        editBuilder.replace(args.commandRange, modifiedText);
+      });
+
+      vscode.window.showInformationMessage('Debug filter applied successfully');
+    } catch (error) {
+      vscode.window.showErrorMessage(`Failed to apply debug filter: ${error}`);
+    }
+  });
+
   // Register test commands for running and debugging tests
   const testCommands = registerTestCommands(context);
   console.log('Registered commands for running and debugging tests');
@@ -84,11 +157,13 @@ export function activate(context: vscode.ExtensionContext) {
     testProvider,
     ...definitionProvider,
     codeLensProvider, // Added provider to subscriptions
+    applyDebugFilterCommand,
     ...testCommands,
     testExplorer,
     testExecutionSubscription,
     autoShowDisposable,
-    testDiagnosticCollection
+    testDiagnosticCollection,
+    applyDebugFilterCommand // Add the debug filter command to subscriptions
   );
 }
 

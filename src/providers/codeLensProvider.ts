@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as jsonc from 'jsonc-parser';
-import { getSupportedModelYearsForCommand, getUnsupportedModelYearsForCommand } from '../utils/commandSupportUtils';
-import { groupModelYearsByGeneration, formatYearsAsRanges } from '../utils/generations';
+import { getSupportedModelYearsForCommand, getUnsupportedModelYearsForCommand, generateDebugFilterSuggestion } from '../utils/commandSupportUtils';
+import { groupModelYearsByGeneration, formatYearsAsRanges, getGenerationForModelYear } from '../utils/generations';
 
 export class CommandCodeLensProvider implements vscode.CodeLensProvider {
   private onDidChangeCodeLensesEmitter: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
@@ -13,6 +13,25 @@ export class CommandCodeLensProvider implements vscode.CodeLensProvider {
         this.onDidChangeCodeLensesEmitter.fire();
       }
     });
+  }
+
+  /**
+   * Detect the vehicle generation based on file path or supported years
+   * This is a heuristic approach - in a real implementation you might want to
+   * read vehicle configuration from a specific file or user setting
+   */
+  private async detectVehicleGeneration(fileName: string, supportedYears: string[]): Promise<any> {
+    // For now, we'll try to determine generation from the first supported year
+    if (supportedYears.length === 0) {
+      return null;
+    }
+
+    // Sort years and take the first one as a reference
+    const sortedYears = supportedYears.map(y => parseInt(y, 10)).sort((a, b) => a - b);
+    const firstYear = sortedYears[0].toString();
+
+    // Use the generation utility to find the generation for this year
+    return await getGenerationForModelYear(firstYear);
   }
 
   async provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.CodeLens[]> {
@@ -32,6 +51,7 @@ export class CommandCodeLensProvider implements vscode.CodeLensProvider {
             let hdr: string | undefined;
             let cmdProperty: jsonc.Node | undefined;
             let rax: string | undefined;
+            let hasDebug = false;
 
             for (const prop of commandNode.children) {
               if (prop.type === 'property' && prop.children && prop.children.length === 2) {
@@ -45,6 +65,9 @@ export class CommandCodeLensProvider implements vscode.CodeLensProvider {
                 }
                 if (keyNode.value === 'rax') {
                   rax = valueNode.value as string;
+                }
+                if (keyNode.value === 'dbg' && valueNode.value === true) {
+                  hasDebug = true;
                 }
               }
             }
@@ -95,6 +118,33 @@ export class CommandCodeLensProvider implements vscode.CodeLensProvider {
 
                 const codeLens = new vscode.CodeLens(range, { title: title, command: '' });
                 codeLenses.push(codeLens);
+
+                // Add debug filter suggestion if command has dbg: true
+                if (hasDebug && supportedYears.length > 0) {
+                  // Try to detect the vehicle generation from the file path or workspace
+                  const generation = await this.detectVehicleGeneration(document.fileName, supportedYears);
+                  if (generation) {
+                    const debugFilter = await generateDebugFilterSuggestion(supportedYears, generation);
+                    if (debugFilter) {
+                      const debugFilterRange = new vscode.Range(
+                        document.positionAt(commandNode.offset),
+                        document.positionAt(commandNode.offset + commandNode.length)
+                      );
+
+                      const debugFilterTitle = `🔧 Apply debug filter for ${generation.name}`;
+                      const debugFilterCodeLens = new vscode.CodeLens(debugFilterRange, {
+                        title: debugFilterTitle,
+                        command: 'obdb.applyDebugFilter',
+                        arguments: [{
+                          documentUri: document.uri.toString(),
+                          commandRange: debugFilterRange,
+                          debugFilter: debugFilter
+                        }]
+                      });
+                      codeLenses.push(debugFilterCodeLens);
+                    }
+                  }
+                }
               }
             }
           }
