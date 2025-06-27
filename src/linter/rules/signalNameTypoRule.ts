@@ -26,7 +26,8 @@ export class SignalNameTypoRule implements ILinterRule {
     'dashboard', 'gauge', 'meter', 'display', 'led', 'bulb', 'lamp',
     'switch', 'button', 'pedal', 'lever', 'knob', 'dial', 'selector',
     'minimum', 'maximum', 'average', 'actual', 'target', 'requested',
-    'available', 'enabled', 'disabled', 'active', 'inactive', 'ready'
+    'available', 'enabled', 'disabled', 'active', 'inactive', 'ready',
+    'rear', 'front'
   ];
 
   // Known common typos and their corrections
