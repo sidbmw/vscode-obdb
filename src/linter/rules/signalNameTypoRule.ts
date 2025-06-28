@@ -95,6 +95,18 @@ export class SignalNameTypoRule implements ILinterRule {
 
     if (typoResult.length > 0) {
       const firstTypo = typoResult[0];
+
+      // Handle case where word is misspelled but has no good suggestion
+      if (firstTypo.correction === '?') {
+        return {
+          ruleId: this.getConfig().id,
+          message: `Possible spelling error: "${firstTypo.typo}" appears to be misspelled (no suggestions available)`,
+          node: nameNode,
+          // No suggestion since we don't have a good correction
+        };
+      }
+
+      // Normal case with a good suggestion
       const correctedName = this.applyCorrectionToText(signal.name, firstTypo.typo, firstTypo.correction);
 
       return {
@@ -200,7 +212,9 @@ export class SignalNameTypoRule implements ILinterRule {
       }
     }
 
-    return null;
+    // If we get here, the word is misspelled but we don't have good suggestions
+    // Still return a special marker to indicate it's misspelled
+    return '?'; // Special marker indicating misspelled word with no good suggestion
   }
 
   /**
