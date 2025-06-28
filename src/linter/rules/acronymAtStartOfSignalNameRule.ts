@@ -4,6 +4,7 @@ import { ILinterRule, LinterRuleConfig, LintResult, LintSeverity, Signal, Signal
 // Common automotive acronyms that should not start a signal name
 const COMMON_ACRONYMS = [
   'ABS', // Anti-lock Braking System
+  'ATF', // Automatic Transmission Fluid
   'BMS', // Battery Management System
   'ECU', // Electronic Control Unit
   'PCM', // Powertrain Control Module
