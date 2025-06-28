@@ -1,152 +1,69 @@
 import * as jsonc from 'jsonc-parser';
 import { ILinterRule, LintResult, Signal, LintSeverity, LinterRuleConfig } from './rule';
 
-// Use require for levenshtein distance calculation
+// Use require for dependencies
 const levenshtein = require('fast-levenshtein');
+const nspell = require('nspell');
 
 /**
- * Rule that checks for common typos in signal names using a combination of
- * known typos and similarity matching against automotive vocabulary
+ * Rule that checks for typos in signal names using dictionary-based spell checking
+ * This provides much better accuracy than hard-coded word lists
  */
 export class SignalNameTypoRule implements ILinterRule {
+  private spellChecker: any = null;
 
-  // Automotive domain-specific words (correct spellings)
-  private readonly automotiveWords: string[] = [
-    'battery', 'voltage', 'current', 'temperature', 'sensor', 'engine', 'throttle',
-    'brake', 'fuel', 'hybrid', 'electric', 'transmission', 'pressure', 'level',
-    'position', 'status', 'control', 'system', 'signal', 'speed', 'torque',
-    'rpm', 'coolant', 'intake', 'exhaust', 'ignition', 'catalyst', 'oxygen',
-    'lambda', 'manifold', 'injector', 'pump', 'valve', 'solenoid', 'actuator',
-    'clutch', 'differential', 'steering', 'suspension', 'airbag', 'seatbelt',
-    'abs', 'esp', 'traction', 'stability', 'cruise', 'parking', 'reverse',
-    'neutral', 'drive', 'gear', 'shift', 'manual', 'automatic', 'cvt',
-    'turbo', 'supercharger', 'intercooler', 'radiator', 'thermostat',
-    'alternator', 'starter', 'generator', 'inverter', 'converter', 'charger',
-    'diagnostic', 'trouble', 'fault', 'error', 'warning', 'indicator',
-    'dashboard', 'gauge', 'meter', 'display', 'led', 'bulb', 'lamp',
-    'switch', 'button', 'pedal', 'lever', 'knob', 'dial', 'selector',
-    'minimum', 'maximum', 'average', 'actual', 'target', 'requested',
-    'available', 'enabled', 'disabled', 'active', 'inactive', 'ready',
-    'rear', 'front'
-  ];
-
-  // Known common typos and their corrections
-  private readonly commonTypos: Map<string, string> = new Map([
-    // Battery typos
-    ['batttery', 'battery'],
-    ['battrey', 'battery'],
-    ['baterry', 'battery'],
-    ['batery', 'battery'],
-
-    // Temperature typos
-    ['temperatur', 'temperature'],
-    ['temprature', 'temperature'],
-    ['tempature', 'temperature'],
-    ['temerature', 'temperature'],
-
-    // Voltage typos
-    ['voltge', 'voltage'],
-    ['volatge', 'voltage'],
-    ['vltage', 'voltage'],
-
-    // Current typos
-    ['curent', 'current'],
-    ['currnt', 'current'],
-    ['currant', 'current'],
-
-    // Sensor typos
-    ['senser', 'sensor'],
-    ['sensr', 'sensor'],
-    ['sensro', 'sensor'],
-
-    // Engine typos
-    ['engin', 'engine'],
-    ['engien', 'engine'],
-    ['engne', 'engine'],
-
-    // Throttle typos
-    ['throttel', 'throttle'],
-    ['throtle', 'throttle'],
-    ['throtlle', 'throttle'],
-
-    // Brake typos
-    ['brak', 'brake'],
-    ['breake', 'brake'],
-    ['braek', 'brake'],
-
-    // Fuel typos
-    ['feul', 'fuel'],
-    ['fule', 'fuel'],
-    ['fuell', 'fuel'],
-
-    // Hybrid typos
-    ['hybrd', 'hybrid'],
-    ['hybird', 'hybrid'],
-    ['hybridd', 'hybrid'],
-
-    // Electric typos
-    ['electrc', 'electric'],
-    ['elecric', 'electric'],
-    ['eletric', 'electric'],
-
-    // Transmission typos
-    ['transmision', 'transmission'],
-    ['transmissio', 'transmission'],
-    ['tranmission', 'transmission'],
-
-    // Pressure typos
-    ['presure', 'pressure'],
-    ['pressue', 'pressure'],
-    ['pressuure', 'pressure'],
-
-    // Level typos
-    ['levl', 'level'],
-    ['lvel', 'level'],
-    ['levle', 'level'],
-
-    // Position typos
-    ['postion', 'position'],
-    ['positon', 'position'],
-    ['positsion', 'position'],
-
-    // Status typos
-    ['staus', 'status'],
-    ['satatus', 'status'],
-    ['statsu', 'status'],
-
-    // Control typos
-    ['contrl', 'control'],
-    ['controol', 'control'],
-    ['controler', 'controller'],
-
-    // System typos
-    ['systm', 'system'],
-    ['sytem', 'system'],
-    ['systme', 'system'],
-
-    // Signal typos
-    ['singal', 'signal'],
-    ['signel', 'signal'],
-    ['signl', 'signal'],
-
-    // Speed typos
-    ['spead', 'speed'],
-    ['speeed', 'speed'],
-    ['sped', 'speed'],
-
-    // Min/max typos
-    ['minimun', 'minimum'],
-    ['minumum', 'minimum'],
-    ['minimm', 'minimum'],
-    ['maximun', 'maximum'],
-    ['maxium', 'maximum'],
-    ['maximm', 'maximum'],
-
-    // Available typos
-    ['availabe', 'available'],
-    ['availible', 'available'],
-    ['avaialble', 'available']
+  // Common automotive/technical abbreviations that are valid even if not in dictionary
+  private readonly validAbbreviations: Set<string> = new Set([
+    'abs', 'esp', 'cvt', 'rpm', 'led', 'obd', 'ecu', 'pcm', 'bcm', 'tcm',
+    'vin', 'dtc', 'pid', 'mil', 'egr', 'dpf', 'def', 'scr', 'nox', 'hc',
+    'co', 'co2', 'o2', 'afr', 'maf', 'map', 'tps', 'iac', 'evap', 'canp',
+    'vvt', 'cam', 'crank', 'knock', 'egt', 'iat', 'ect', 'cht', 'oil',
+    'psig', 'psi', 'kpa', 'mph', 'kmh', 'gph', 'lph', 'mpg', 'lpkm',
+    'deg', 'temp', 'vol', 'amp', 'ohm', 'hz', 'kwh', 'btuh', 'cfm',
+    'api', 'can', 'lin', 'pwm', 'gpio', 'adc', 'dac', 'spi', 'i2c',
+    'uart', 'usb', 'tcp', 'udp', 'http', 'https', 'json', 'xml', 'csv'
   ]);
+
+  // Words that are commonly flagged but are actually correct in automotive context
+  private readonly domainSpecificWords: Set<string> = new Set([
+    'actuator', 'solenoid', 'injector', 'turbo', 'intercooler', 'radiator',
+    'thermostat', 'alternator', 'inverter', 'converter', 'catalyst',
+    'manifold', 'throttle', 'drivetrain', 'powertrain', 'driveline',
+    'camshaft', 'crankshaft', 'flywheel', 'flexplate', 'torque', 'clutch',
+    'differential', 'transaxle', 'halfshaft', 'driveshaft', 'propshaft',
+    'coolant', 'antifreeze', 'brake', 'caliper', 'rotor', 'seatbelt',
+    'airbag', 'traction', 'stability', 'cruise', 'parking', 'reverse',
+    'overdrive', 'lockup', 'downshift', 'upshift', 'kickdown'
+  ]);
+
+  constructor() {
+    this.initializeSpellChecker();
+  }
+
+  /**
+   * Initialize the spell checker with dictionary
+   */
+  private async initializeSpellChecker(): Promise<void> {
+    try {
+      // Use dynamic import for ESM module
+      const dictionaryEn = await import('dictionary-en');
+
+      // dictionary-en exports aff and dic buffers directly
+      this.spellChecker = nspell(dictionaryEn.default);
+
+      // Add domain-specific words to personal dictionary
+      this.domainSpecificWords.forEach(word => {
+        this.spellChecker.add(word);
+      });
+
+      this.validAbbreviations.forEach(abbrev => {
+        this.spellChecker.add(abbrev);
+      });
+    } catch (error) {
+      console.warn('Failed to initialize spell checker:', error);
+      this.spellChecker = null;
+    }
+  }
 
   /**
    * Gets the rule configuration
@@ -154,8 +71,8 @@ export class SignalNameTypoRule implements ILinterRule {
   public getConfig(): LinterRuleConfig {
     return {
       id: 'signal-name-typo',
-      name: 'Signal Name Typo Detection',
-      description: 'Detects common typos in signal names and suggests corrections',
+      name: 'Signal Name Spell Check',
+      description: 'Uses system dictionary to detect spelling errors in signal names with automotive domain awareness',
       severity: LintSeverity.Warning,
       enabled: true,
     };
@@ -182,10 +99,10 @@ export class SignalNameTypoRule implements ILinterRule {
 
       return {
         ruleId: this.getConfig().id,
-        message: `Possible typo in signal name: "${firstTypo.typo}" should be "${firstTypo.correction}"`,
+        message: `Possible spelling error: "${firstTypo.typo}" may be misspelled (suggested: "${firstTypo.correction}")`,
         node: nameNode,
         suggestion: {
-          title: `Fix typo: "${firstTypo.typo}" → "${firstTypo.correction}"`,
+          title: `Fix spelling: "${firstTypo.typo}" → "${firstTypo.correction}"`,
           edits: [{
             newText: `"${correctedName}"`,
             offset: nameNode.offset,
@@ -199,17 +116,25 @@ export class SignalNameTypoRule implements ILinterRule {
   }
 
   /**
-   * Finds typos in the given text
+   * Finds typos in the given text using dictionary spell checking
    * @param text The text to check for typos
    * @returns Array of found typos with their corrections
    */
   private findTyposInText(text: string): Array<{ typo: string; correction: string }> {
     const foundTypos: Array<{ typo: string; correction: string }> = [];
 
-    // Split text into words and check each one
-    const words = text.toLowerCase().match(/\b[a-z]+\b/g) || [];
+    // Extract words from the text, handling common signal name patterns
+    // This regex captures:
+    // - Regular words (letters only)
+    // - Words that may contain numbers but start with letters
+    const words = text.toLowerCase().match(/\b[a-z]+(?:[a-z]*\b|\d*[a-z]+\b)/g) || [];
 
     for (const word of words) {
+      // Skip pure numeric suffixes and very short words
+      if (word.length < 3 || /^\d+$/.test(word)) {
+        continue;
+      }
+
       const correction = this.findCorrection(word);
       if (correction) {
         foundTypos.push({ typo: word, correction });
@@ -220,40 +145,58 @@ export class SignalNameTypoRule implements ILinterRule {
   }
 
   /**
-   * Find correction for a potentially misspelled word
+   * Find correction for a potentially misspelled word using dictionary spell checking
    * @param word The word to check
    * @returns The correction if found, null otherwise
    */
   private findCorrection(word: string): string | null {
     const lowerWord = word.toLowerCase();
 
-    // First check known typos
-    if (this.commonTypos.has(lowerWord)) {
-      return this.commonTypos.get(lowerWord)!;
-    }
-
-    // If it's a known correct automotive word, no correction needed
-    if (this.automotiveWords.includes(lowerWord)) {
+    // Skip very short words (likely abbreviations)
+    if (lowerWord.length < 3) {
       return null;
     }
 
-    // Use Levenshtein distance to find similar automotive words
-    // Only suggest if the word is close enough and not too short
-    if (lowerWord.length >= 4) {
-      const candidates = this.automotiveWords
-        .map(candidate => ({
-          word: candidate,
-          distance: levenshtein.get(lowerWord, candidate)
-        }))
-        .filter(candidate => {
-          // More lenient for longer words
-          const maxDistance = candidate.word.length > 6 ? 2 : 1;
-          return candidate.distance <= maxDistance && candidate.distance > 0;
-        })
-        .sort((a, b) => a.distance - b.distance);
+    // Skip if spell checker isn't initialized
+    if (!this.spellChecker) {
+      return null;
+    }
 
-      if (candidates.length > 0) {
-        return candidates[0].word;
+    // Skip if it's a known valid abbreviation
+    if (this.validAbbreviations.has(lowerWord)) {
+      return null;
+    }
+
+    // Skip if it's a known domain-specific word
+    if (this.domainSpecificWords.has(lowerWord)) {
+      return null;
+    }
+
+    // Skip numeric strings or mixed alphanumeric that aren't words
+    if (/^\d+$/.test(lowerWord) || /\d/.test(lowerWord)) {
+      return null;
+    }
+
+    // Use nspell to check if word is misspelled
+    const isCorrect = this.spellChecker.correct(word);
+    if (isCorrect) {
+      return null; // Word is correctly spelled
+    }
+
+    // Get suggestions from spell checker
+    const suggestions = this.spellChecker.suggest(word);
+
+    if (suggestions && suggestions.length > 0) {
+      // Return the first suggestion that seems reasonable
+      const firstSuggestion = suggestions[0];
+
+      // Only suggest if the suggestion is reasonably similar
+      // (prevents crazy suggestions for technical terms)
+      const distance = levenshtein.get(lowerWord, firstSuggestion.toLowerCase());
+      const maxDistance = Math.min(2, Math.floor(lowerWord.length / 3));
+
+      if (distance <= maxDistance && firstSuggestion.length >= 3) {
+        return firstSuggestion.toLowerCase();
       }
     }
 
