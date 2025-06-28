@@ -4,14 +4,52 @@ import { ILinterRule, LinterRuleConfig, LintResult, LintSeverity, Signal, Signal
 // Common automotive acronyms that should not start a signal name
 const COMMON_ACRONYMS = [
   'ABS', // Anti-lock Braking System
+  'ACC', // Adaptive Cruise Control
+  'ACM', // Audio Control Module
+  'ACU', // Airbag Control Unit
+  'ADAS', // Advanced Driver Assistance Systems
+  'AFR', // Air-Fuel Ratio
   'ATF', // Automatic Transmission Fluid
+  'BCM', // Body Control Module
   'BMS', // Battery Management System
+  'CAN', // Controller Area Network
+  'CCM', // Climate Control Module
+  'CDI', // Capacitor Discharge Ignition
+  'CVT', // Continuously Variable Transmission
+  'DPF', // Diesel Particulate Filter
+  'DSC', // Dynamic Stability Control
+  'ECM', // Engine Control Module
   'ECU', // Electronic Control Unit
-  'PCM', // Powertrain Control Module
-  'TCM', // Transmission Control Module
+  'EGR', // Exhaust Gas Recirculation
   'EPS', // Electric Power Steering
+  'ESC', // Electronic Stability Control
+  'ESP', // Electronic Stability Program
+  'ETC', // Electronic Throttle Control
+  'GPS', // Global Positioning System
   'HVAC', // Heating, Ventilation, and Air Conditioning
+  'ICE', // Internal Combustion Engine
+  'ICM', // Ignition Control Module
+  'IMA', // Integrated Motor Assist
+  'IMMO', // Immobilizer
+  'IPC', // Instrument Panel Cluster
+  'LCA', // Lane Change Assist
+  'LKA', // Lane Keep Assist
+  'MAF', // Mass Air Flow
+  'MAP', // Manifold Absolute Pressure
+  'OBD', // On-Board Diagnostics
+  'OCS', // Occupant Classification System
+  'PCM', // Powertrain Control Module
+  'PDC', // Park Distance Control
+  'RCM', // Restraint Control Module
+  'SAS', // Steering Angle Sensor
+  'SRS', // Supplemental Restraint System
+  'TCM', // Transmission Control Module
+  'TCS', // Traction Control System
+  'TPS', // Throttle Position Sensor
   'TPMS', // Tire Pressure Monitoring System
+  'VIN', // Vehicle Identification Number
+  'VSC', // Vehicle Stability Control
+  'VVT', // Variable Valve Timing
   // Add more acronyms as needed
 ];
 
