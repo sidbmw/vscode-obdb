@@ -119,9 +119,16 @@ export class CommandCodeLensProvider implements vscode.CodeLensProvider {
    */
   private calculateSuggestedRax(hdr: string): string | null {
     try {
+      // Only 11-bit headers (3 characters) are supported.
+      if (hdr.length !== 3) {
+        return null; // Invalid header length for this calculation
+      }
       // Parse hex string to number, add 8, convert back to hex
       const hdrNum = parseInt(hdr, 16);
       if (isNaN(hdrNum)) {
+        return null;
+      }
+      if (hdrNum == 0x7DF) {
         return null;
       }
       const raxNum = hdrNum + 8;
