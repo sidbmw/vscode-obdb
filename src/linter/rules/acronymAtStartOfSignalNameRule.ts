@@ -16,6 +16,7 @@ const COMMON_ACRONYMS = [
   'CCM', // Climate Control Module
   'CDI', // Capacitor Discharge Ignition
   'CVT', // Continuously Variable Transmission
+  'CVVT', // Continuously Variable Valve Timing
   'DPF', // Diesel Particulate Filter
   'DSC', // Dynamic Stability Control
   'ECM', // Engine Control Module
