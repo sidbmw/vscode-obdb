@@ -173,6 +173,42 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  // Register command for adding rax filter
+  const addRaxFilterCommand = vscode.commands.registerCommand('obdb.addRaxFilter', async (args: {
+    documentUri: string;
+    commandRange: vscode.Range;
+    suggestedRax: string;
+  }) => {
+    try {
+      const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(args.documentUri));
+      const editor = await vscode.window.showTextDocument(document);
+
+      // Get the command object text
+      let commandText = document.getText(args.commandRange);
+
+      // Find the hdr property and insert rax immediately after it
+      const hdrMatch = commandText.match(/"hdr"\s*:\s*"[^"]*"/);
+
+      if (hdrMatch && hdrMatch.index !== undefined) {
+        const insertPosition = hdrMatch.index + hdrMatch[0].length;
+        const beforeInsert = commandText.substring(0, insertPosition);
+        const afterInsert = commandText.substring(insertPosition);
+
+        const modifiedText = beforeInsert + `, "rax": "${args.suggestedRax}"` + afterInsert;
+
+        await editor.edit(editBuilder => {
+          editBuilder.replace(args.commandRange, modifiedText);
+        });
+
+        vscode.window.showInformationMessage(`Rax filter "${args.suggestedRax}" added successfully`);
+      } else {
+        vscode.window.showErrorMessage('Could not find hdr property to insert rax filter after');
+      }
+    } catch (error) {
+      vscode.window.showErrorMessage(`Failed to add rax filter: ${error}`);
+    }
+  });
+
   // Register test commands for running and debugging tests
   const testCommands = registerTestCommands(context);
   console.log('Registered commands for running and debugging tests');
@@ -214,6 +250,7 @@ export function activate(context: vscode.ExtensionContext) {
     codeLensProvider, // Added provider to subscriptions
     applyDebugFilterCommand,
     optimizeDebugFilterCommand,
+    addRaxFilterCommand,
     ...testCommands,
     testExplorer,
     testExecutionSubscription,

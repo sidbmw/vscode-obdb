@@ -112,6 +112,25 @@ export class CommandCodeLensProvider implements vscode.CodeLensProvider {
     return optimized;
   }
 
+  /**
+   * Calculate suggested rax value by adding 8 to the hex hdr value
+   * @param hdr The header value as a hex string (e.g., "7E0")
+   * @returns The suggested rax value as a hex string (e.g., "7E8")
+   */
+  private calculateSuggestedRax(hdr: string): string | null {
+    try {
+      // Parse hex string to number, add 8, convert back to hex
+      const hdrNum = parseInt(hdr, 16);
+      if (isNaN(hdrNum)) {
+        return null;
+      }
+      const raxNum = hdrNum + 8;
+      return raxNum.toString(16).toUpperCase();
+    } catch (e) {
+      return null;
+    }
+  }
+
   async provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.CodeLens[]> {
     const codeLenses: vscode.CodeLens[] = [];
     if (!document.fileName.includes('signalsets') && !document.fileName.includes('commands')) {
@@ -228,6 +247,29 @@ export class CommandCodeLensProvider implements vscode.CodeLensProvider {
                       });
                       codeLenses.push(debugFilterCodeLens);
                     }
+                  }
+                }
+
+                // Suggest adding rax filter if missing
+                if (!rax && hdr) {
+                  const suggestedRax = this.calculateSuggestedRax(hdr);
+                  if (suggestedRax) {
+                    const raxSuggestionRange = new vscode.Range(
+                      document.positionAt(commandNode.offset),
+                      document.positionAt(commandNode.offset + commandNode.length)
+                    );
+
+                    const raxSuggestionTitle = `💡 Add rax filter: "${suggestedRax}"`;
+                    const raxSuggestionCodeLens = new vscode.CodeLens(raxSuggestionRange, {
+                      title: raxSuggestionTitle,
+                      command: 'obdb.addRaxFilter',
+                      arguments: [{
+                        documentUri: document.uri.toString(),
+                        commandRange: raxSuggestionRange,
+                        suggestedRax: suggestedRax
+                      }]
+                    });
+                    codeLenses.push(raxSuggestionCodeLens);
                   }
                 }
 
