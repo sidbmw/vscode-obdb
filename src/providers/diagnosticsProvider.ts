@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'yaml';
 import * as jsonc from 'jsonc-parser';
-import { generateCommandId } from '../utils/commandParser';
+import { generateCommandIdFromDefinition } from '../utils/commandParser';
 import { SignalLinter } from '../linter/signalLinter';
 import { SignalLinterCodeActionProvider } from './signalLinterCodeActionProvider';
 import { Signal, SignalGroup } from '../linter/rules/rule';
@@ -179,8 +179,9 @@ async function updateDiagnostics(document: vscode.TextDocument): Promise<void> {
           const cmd = jsonc.getNodeValue(cmdNode);
           const rax = raxNode ? jsonc.getNodeValue(raxNode) : undefined;
 
-          // Generate the command ID with RAX when available
-          const commandId = generateCommandId(header, cmd, rax);
+          // Generate the command ID using the full command definition
+          const commandDefinition = jsonc.getNodeValue(commandNode);
+          const commandId = generateCommandIdFromDefinition(commandDefinition);
 
           // Check if command is unsupported
           const isSupportedByAnyYear = await isCommandSupported(commandId);

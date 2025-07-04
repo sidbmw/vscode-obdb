@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isPositionInCommand, getSampleCommandResponses, generateCommandId, generateCommandIdFromDefinition } from '../utils/commandParser';
+import { isPositionInCommand, getSampleCommandResponses, generateCommandIdFromDefinition } from '../utils/commandParser';
 import { extractSignals } from './signalExtractor';
 import { generateBitmapHtml } from './htmlGenerator';
 import { getWebviewContent } from './webviewContent';
