@@ -19,7 +19,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
 
     - name: Install dependencies
       run: npm ci
@@ -67,7 +67,7 @@ jobs:
           files: "*.vsix"
           name: Release ${{ steps.get_version.outputs.VERSION }}
           body: |
-            ## Signal ID Hover Info Extension v${{ steps.get_version.outputs.VERSION }}
+            ## OBDb Extension v${{ steps.get_version.outputs.VERSION }}
 
             ### Installation Instructions
 
