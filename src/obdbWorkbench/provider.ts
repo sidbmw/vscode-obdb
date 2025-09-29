@@ -10,6 +10,10 @@ let currentCommand: any | undefined;
 // Track which document created the visualization
 let sourceDocument: vscode.TextDocument | undefined;
 
+// Cancellation and debouncing for heavy processing
+let currentCancellationTokenSource: vscode.CancellationTokenSource | undefined;
+let debounceTimer: NodeJS.Timeout | undefined;
+
 /**
  * Initialize the OBDb workbench provider
  * Shows bitmap visualizations when editing commands
@@ -98,7 +102,14 @@ export function createVisualizationProvider(): vscode.Disposable {
 
       // If we have a current command, update the visualization
       if (currentCommand) {
-        updateVisualizationPanel(currentCommand);
+        // Cancel any existing operations before starting a new one
+        cancelCurrentOperations();
+        currentCancellationTokenSource = new vscode.CancellationTokenSource();
+        updateVisualizationPanel(currentCommand, currentCancellationTokenSource.token).catch(error => {
+          if (!(error instanceof vscode.CancellationError)) {
+            console.error('Error updating visualization panel:', error);
+          }
+        });
       }
     })
   );
@@ -111,9 +122,34 @@ export function createVisualizationProvider(): vscode.Disposable {
         visualizationPanel.dispose();
         visualizationPanel = undefined;
       }
+      // Cancel any running operations and clear timers
+      if (currentCancellationTokenSource) {
+        currentCancellationTokenSource.cancel();
+        currentCancellationTokenSource.dispose();
+        currentCancellationTokenSource = undefined;
+      }
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = undefined;
+      }
       sourceDocument = undefined;
     }
   };
+}
+
+/**
+ * Cancel any currently running visualization update operations
+ */
+function cancelCurrentOperations() {
+  if (currentCancellationTokenSource) {
+    currentCancellationTokenSource.cancel();
+    currentCancellationTokenSource.dispose();
+    currentCancellationTokenSource = undefined;
+  }
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = undefined;
+  }
 }
 
 /**
@@ -175,49 +211,76 @@ async function updateVisualizationFromCursor(editor: vscode.TextEditor): Promise
 }
 
 /**
- * Update visualization based on a given position
+ * Update visualization based on a given position with debouncing and cancellation
  */
 async function updateVisualizationFromPosition(editor: vscode.TextEditor, position: vscode.Position): Promise<void> {
   if (!editor || editor.document.languageId !== 'json') return;
 
-  // Check if we're in a command
-  const commandCheck = isPositionInCommand(editor.document, position);
-  if (!commandCheck.isCommand || !commandCheck.commandObject) {
-    currentCommand = undefined;
-    return;
-  }
+  // Cancel any existing operations
+  cancelCurrentOperations();
 
-  // We're in a command definition, store the command
-  const command = commandCheck.commandObject;
-  currentCommand = command;
+  // Debounce the update to avoid excessive processing during rapid changes
+  debounceTimer = setTimeout(async () => {
+    try {
+      // Check if we're in a command
+      const commandCheck = isPositionInCommand(editor.document, position);
+      if (!commandCheck.isCommand || !commandCheck.commandObject) {
+        currentCommand = undefined;
+        return;
+      }
 
-  // If panel exists, update it - use isVisible() check instead of visible property
-  if (visualizationPanel) {
-    // Only update if the panel is visible to avoid unnecessary processing
-    updateVisualizationPanel(command);
-  }
+      // We're in a command definition, store the command
+      const command = commandCheck.commandObject;
+      currentCommand = command;
+
+      // If panel exists, update it with cancellation token
+      if (visualizationPanel) {
+        // Create new cancellation token for this operation
+        currentCancellationTokenSource = new vscode.CancellationTokenSource();
+        await updateVisualizationPanel(command, currentCancellationTokenSource.token);
+      }
+    } catch (error) {
+      // If operation was cancelled, ignore the error
+      if (error instanceof vscode.CancellationError) {
+        return;
+      }
+      console.error('Error updating visualization:', error);
+    }
+  }, 150); // 150ms debounce delay
 }
 
 /**
  * Update the visualization panel with command data
  */
-export async function updateVisualizationPanel(command: any) {
+export async function updateVisualizationPanel(command: any, cancellationToken?: vscode.CancellationToken) {
   if (!visualizationPanel) {
     createOrShowVisualizationPanel();
+  }
+
+  // Check if operation was cancelled before starting
+  if (cancellationToken?.isCancellationRequested) {
+    throw new vscode.CancellationError();
   }
 
   // Extract signals from the command
   const signals = extractSignals(command);
 
+  // Check cancellation after each potentially expensive operation
+  if (cancellationToken?.isCancellationRequested) {
+    throw new vscode.CancellationError();
+  }
+
   // Generate HTML for the bitmap visualization
   const bitmapHtml = generateBitmapHtml(command, signals);
+
+  if (cancellationToken?.isCancellationRequested) {
+    throw new vscode.CancellationError();
+  }
 
   // Get command details for display
   const commandName = command.name || 'Command';
   const commandId = command.id || '';
   const commandHeader = command.hdr || '';
-  const commandCmdValue = command.cmd || '';
-  const commandRax = command.rax || '';
   const commandDisplay = typeof command.cmd === 'object'
     ? Object.entries(command.cmd).map(([k, v]) => `${k}: ${v}`).join(', ')
     : command.cmd?.toString() || '';
@@ -228,8 +291,17 @@ export async function updateVisualizationPanel(command: any) {
     fullCommandId = generateCommandIdFromDefinition(command);
   }
 
-  // Fetch sample responses if we have a command ID
-  const sampleResponses = fullCommandId ? await getSampleCommandResponses(fullCommandId) : [];
+  if (cancellationToken?.isCancellationRequested) {
+    throw new vscode.CancellationError();
+  }
+
+  // Fetch sample responses if we have a command ID - this is the most expensive operation
+  const sampleResponses = fullCommandId ? await getSampleCommandResponses(fullCommandId, cancellationToken) : [];
+
+  // Final cancellation check before updating UI
+  if (cancellationToken?.isCancellationRequested) {
+    throw new vscode.CancellationError();
+  }
 
   // Update the webview content
   visualizationPanel!.webview.html = getWebviewContent(

@@ -135,10 +135,16 @@ function normalizeSignals(signals: any[]): Signal[] {
 /**
  * Fetches sample responses for a command from test case files
  * @param commandId The command ID to search for (e.g. '7E0.22295A')
+ * @param cancellationToken Optional cancellation token to cancel the operation
  * @returns Array of objects containing model year and sample response data
  */
-export async function getSampleCommandResponses(commandId: string): Promise<Array<{modelYear: string, response: string, expectedValues?: Record<string, any>}>> {
+export async function getSampleCommandResponses(commandId: string, cancellationToken?: vscode.CancellationToken): Promise<Array<{modelYear: string, response: string, expectedValues?: Record<string, any>}>> {
   if (!commandId) return [];
+
+  // Check cancellation before starting expensive I/O operations
+  if (cancellationToken?.isCancellationRequested) {
+    throw new vscode.CancellationError();
+  }
 
   try {
     const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -150,6 +156,11 @@ export async function getSampleCommandResponses(commandId: string): Promise<Arra
     // Check if the test_cases directory exists
     if (!fs.existsSync(testCasesPath)) return [];
 
+    // Check cancellation before expensive filesystem operations
+    if (cancellationToken?.isCancellationRequested) {
+      throw new vscode.CancellationError();
+    }
+
     const samples: Array<{modelYear: string, response: string, expectedValues?: Record<string, any>}> = [];
     const modelYearDirs = fs.readdirSync(testCasesPath)
       .filter(dir => /^\d{4}$/.test(dir))  // Only include directories that are 4 digit years
@@ -157,6 +168,11 @@ export async function getSampleCommandResponses(commandId: string): Promise<Arra
 
     // Find command files for this commandId across model years
     for (const yearDir of modelYearDirs) {
+      // Check cancellation during each iteration of the loop
+      if (cancellationToken?.isCancellationRequested) {
+        throw new vscode.CancellationError();
+      }
+
       const yearPath = path.join(testCasesPath, yearDir);
       const commandsDir = path.join(yearPath, 'commands');
 
@@ -188,6 +204,10 @@ export async function getSampleCommandResponses(commandId: string): Promise<Arra
 
     return samples;
   } catch (error) {
+    // If operation was cancelled, re-throw the cancellation error
+    if (error instanceof vscode.CancellationError) {
+      throw error;
+    }
     console.error('Error fetching sample command responses:', error);
     return [];
   }
