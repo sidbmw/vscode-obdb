@@ -179,6 +179,14 @@ export class SignalNameTypoRule implements ILinterRule {
       return null;
     }
 
+    // Skip if it's a plural form of a valid abbreviation (e.g., "dtcs" from "dtc")
+    if (lowerWord.endsWith('s') && lowerWord.length > 1) {
+      const baseWord = lowerWord.slice(0, -1);
+      if (this.validAbbreviations.has(baseWord)) {
+        return null;
+      }
+    }
+
     // Skip if it's a known domain-specific word
     if (this.domainSpecificWords.has(lowerWord)) {
       return null;
