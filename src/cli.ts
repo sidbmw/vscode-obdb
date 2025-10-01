@@ -97,7 +97,7 @@ function calculateDebugFilter(
   // Years at the boundaries are covered by "to" and "from"
   const gapYears: number[] = [];
   for (let year = minYear + 1; year < maxYear; year++) {
-    if (!supported.includes(year)) {
+    if (!supported.includes(year) && !unsupported.includes(year)) {
       gapYears.push(year);
     }
   }
