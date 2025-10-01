@@ -5,7 +5,9 @@
       "Bash(npm run compile:cli:*)",
       "Bash(chmod:*)",
       "Read(//Users/fearlessdesign/workbench/ClutchEngineering/workspace/**)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(npm run compile:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { generateCommandIdFromDefinition, ID_PROPERTY_DIVIDER } from './commandParser';
+import { generateCommandIdFromDefinition, ID_PROPERTY_DIVIDER } from './commandIdUtils';
 import { Generation, getGenerations } from './generations';
 
 /**
