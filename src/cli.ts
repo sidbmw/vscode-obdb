@@ -8,6 +8,7 @@ import {
   getSupportedModelYearsForCommand,
   getUnsupportedModelYearsForCommand
 } from './utils/commandSupportUtils';
+import { getGenerations, GenerationSet } from './utils/generationsCore';
 
 interface CliOptions {
   command: string;
@@ -53,8 +54,16 @@ function printUsage(): void {
 /**
  * Calculates the debug filter based on supported and unsupported years
  * Returns null if the command should have "dbg": true instead
+ * @param supportedYears Array of supported model years
+ * @param unsupportedYears Array of unsupported model years
+ * @param earliestYear Optional earliest model year for the vehicle (from generations data)
+ * @param latestYear Optional latest model year for the vehicle (from generations data)
  */
-function calculateDebugFilter(supportedYears: string[], unsupportedYears: string[]): any | null {
+function calculateDebugFilter(
+  supportedYears: string[],
+  unsupportedYears: string[],
+  generationSet: GenerationSet
+): any | null {
   const supported = supportedYears.map(y => parseInt(y, 10));
   const unsupported = unsupportedYears.map(y => parseInt(y, 10));
   const allYears = [...supported, ...unsupported].sort((a, b) => a - b);
@@ -64,14 +73,25 @@ function calculateDebugFilter(supportedYears: string[], unsupportedYears: string
     return null;
   }
 
-  const minYear = Math.min(...allYears);
-  const maxYear = Math.max(...allYears);
+  let minYear = Math.min(...allYears);
+  let maxYear = Math.max(...allYears);
+
+  // Constrain to generation bounds if available
+  if (generationSet.firstYear !== undefined && minYear < generationSet.firstYear) {
+    minYear = generationSet.firstYear;
+  }
+  if (generationSet.lastYear !== undefined && maxYear > generationSet.lastYear) {
+    maxYear = generationSet.lastYear;
+  }
 
   // Build the filter
   const filter: any = {};
 
-  // "to" is the smallest year minus one
-  filter.to = minYear - 1;
+  // "to" is the smallest year minus one (but not before earliest year if specified)
+  const toYear = minYear - 1;
+  if (toYear >= generationSet.firstYear) {
+    filter.to = toYear;
+  }
 
   // Find years between min and max (exclusive) that are unsupported
   // Years at the boundaries are covered by "to" and "from"
@@ -86,8 +106,11 @@ function calculateDebugFilter(supportedYears: string[], unsupportedYears: string
     filter.years = gapYears;
   }
 
-  // "from" is the largest year plus one
-  filter.from = maxYear + 1;
+  // "from" is the largest year plus one (but not after latest year if specified)
+  const fromYear = maxYear + 1;
+  if (!generationSet.lastYear || fromYear <= generationSet.lastYear + 1) {
+    filter.from = fromYear;
+  }
 
   return filter;
 }
@@ -107,6 +130,14 @@ async function optimizeCommand(workspacePath: string, commit: boolean = false): 
     console.error(`Error: Signalset file not found at ${signalsetPath}`);
     process.exit(1);
   }
+
+  // Load generations data to determine earliest and latest model years
+  const generations = await getGenerations(workspacePath);
+  const generationSet = new GenerationSet(generations || []);
+  let earliestYear = generationSet.firstYear;
+  let latestYear = generationSet.lastYear;
+
+  console.log(`Generations found: earliest year = ${earliestYear}, latest year = ${latestYear || 'ongoing'}`);
 
   try {
     let content = await fs.promises.readFile(signalsetPath, 'utf-8');
@@ -159,7 +190,7 @@ async function optimizeCommand(workspacePath: string, commit: boolean = false): 
       console.log(`     Supported years: ${supportedYears.length > 0 ? supportedYears.join(', ') : 'none'}`);
       console.log(`     Unsupported years: ${unsupportedYears.length > 0 ? unsupportedYears.join(', ') : 'none'}`);
 
-      const newFilter = calculateDebugFilter(supportedYears, unsupportedYears);
+      const newFilter = calculateDebugFilter(supportedYears, unsupportedYears, generationSet);
 
       if (newFilter === null) {
         console.log(`     ✅ Setting: "dbg": true`);
@@ -195,9 +226,13 @@ async function optimizeCommand(workspacePath: string, commit: boolean = false): 
         const commandEnd = commandNode.offset + commandNode.length;
         let commandText = content.substring(commandStart, commandEnd);
 
-        // Remove existing "dbg" and "dbgfilter" properties
+        // First, remove "dbg"
+        commandText = commandText.replace(/,\s*"dbg"\s*:\s*true/g, '');
         commandText = commandText.replace(/"dbg"\s*:\s*true\s*,?\s*/g, '');
-        commandText = commandText.replace(/,?\s*"dbgfilter"\s*:\s*\{[^}]*\}\s*,?/g, '');
+
+        // Then, remove "dbgfilter"
+        commandText = commandText.replace(/,\s*"dbgfilter"\s*:\s*\{[^}]*\}/g, '');
+        commandText = commandText.replace(/"dbgfilter"\s*:\s*\{[^}]*\}\s*,?\s*/g, '');
 
         // Find the first line (header line with hdr, rax, cmd)
         const lines = commandText.split('\n');
