@@ -183,7 +183,6 @@ export async function getSupportedModelYearsForCommand(commandId: string, worksp
             for (const file of commandFiles) {
               // Parse the filename to extract header and suffix
               const fileNameWithoutExt = normalizeCommandId(file.replace(/\.(yaml|yml)$/, ''));
-              console.log(`File without ext: ${fileNameWithoutExt}`);
               const fileParts = fileNameWithoutExt.split('.');
               const fileHeader = fileParts[0]; // e.g., "701" from "701.709.220103"
               const fileSuffix = fileParts[fileParts.length - 1]; // e.g., "220103" from "701.709.220103"
