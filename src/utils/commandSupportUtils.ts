@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
@@ -62,13 +61,11 @@ export function generateNormalizedCommandId(command: any): string {
 /**
  * Gets all model years that explicitly list a command as unsupported
  * @param commandId The command ID to check (e.g. '7E0.2211BA')
+ * @param workspaceRoot The workspace folder root path
  * @returns Array of model years where the command is explicitly unsupported
  */
-export async function getUnsupportedModelYearsForCommand(commandId: string): Promise<string[]> {
-  if (!vscode.workspace.workspaceFolders) {
-    return [];
-  }
-  const testCasesPath = path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, 'tests', 'test_cases');
+export async function getUnsupportedModelYearsForCommand(commandId: string, workspaceRoot: string): Promise<string[]> {
+  const testCasesPath = path.join(workspaceRoot, 'tests', 'test_cases');
   const unsupportedYears: string[] = [];
 
   try {
@@ -123,14 +120,12 @@ export async function getUnsupportedModelYearsForCommand(commandId: string): Pro
 /**
  * Gets all model years that support a specific command
  * @param commandId The command ID to check (e.g. '7E0.2211BA')
+ * @param workspaceRoot The workspace folder root path
  * @returns Array of model years that support the command
  */
-export async function getSupportedModelYearsForCommand(commandId: string): Promise<string[]> {
-  if (!vscode.workspace.workspaceFolders) {
-    return [];
-  }
+export async function getSupportedModelYearsForCommand(commandId: string, workspaceRoot: string): Promise<string[]> {
   const cmdPart = commandId.split('.').pop() || '';
-  const testCasesPath = path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, 'tests', 'test_cases');
+  const testCasesPath = path.join(workspaceRoot, 'tests', 'test_cases');
   const supportedYears: string[] = [];
 
   try {

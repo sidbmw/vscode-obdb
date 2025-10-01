@@ -1,15 +1,15 @@
-import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
 /**
  * Gets all model years that support a specific signal ID
  * @param signalId The signal ID to look up support for
+ * @param workspaceRoot The workspace folder root path
  * @returns Array of model years that support the signal
  */
-export async function getModelYearsForSignalId(signalId: string): Promise<string[]> {
+export async function getModelYearsForSignalId(signalId: string, workspaceRoot: string): Promise<string[]> {
   // Find all model year directories
-  const testCasesPath = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, 'tests', 'test_cases');
+  const testCasesPath = path.join(workspaceRoot, 'tests', 'test_cases');
   const modelYears: string[] = [];
 
   try {

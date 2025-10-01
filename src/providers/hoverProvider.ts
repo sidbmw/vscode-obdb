@@ -35,8 +35,14 @@ export function createHoverProvider(): vscode.Disposable {
 
         // If we found a signal ID match, get its supported model years
         if (match && match[1] === word) {
+          // Get the workspace root
+          const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+          if (!workspaceRoot) {
+            return undefined;
+          }
+
           // Get supported model years for this signal ID
-          const modelYears = await getModelYearsForSignalId(word);
+          const modelYears = await getModelYearsForSignalId(word, workspaceRoot);
 
           if (modelYears.length > 0) {
             // Add the signal ID title
@@ -177,14 +183,20 @@ export function createHoverProvider(): vscode.Disposable {
           }
 
           if (commandId) {
+            // Get the workspace root
+            const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!workspaceRoot) {
+              return undefined;
+            }
+
             // First display command ID
             markdownContent.appendMarkdown(`## Command: \`${commandId}\`\n\n`);
 
             // Get unsupported model years for this command
-            const unsupportedYears = await getUnsupportedModelYearsForCommand(commandId);
+            const unsupportedYears = await getUnsupportedModelYearsForCommand(commandId, workspaceRoot);
 
             // Get supported model years for this command
-            const supportedYears = await getSupportedModelYearsForCommand(commandId);
+            const supportedYears = await getSupportedModelYearsForCommand(commandId, workspaceRoot);
 
             // Create a combined table of all years with support status
             const allYears = [...new Set([...supportedYears, ...unsupportedYears])];

@@ -144,6 +144,11 @@ export class CommandCodeLensProvider implements vscode.CodeLensProvider {
       return [];
     }
 
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceRoot) {
+      return [];
+    }
+
     const text = document.getText();
     const rootNode = jsonc.parseTree(text);
 
@@ -210,8 +215,8 @@ export class CommandCodeLensProvider implements vscode.CodeLensProvider {
                   document.positionAt(commandNode.offset + commandNode.length)
                 );
 
-                const supportedYears = await getSupportedModelYearsForCommand(commandId);
-                const unsupportedYears = await getUnsupportedModelYearsForCommand(commandId);
+                const supportedYears = await getSupportedModelYearsForCommand(commandId, workspaceRoot);
+                const unsupportedYears = await getUnsupportedModelYearsForCommand(commandId, workspaceRoot);
 
                 // Filter out any years from unsupportedYears that are also in supportedYears
                 const finalUnsupportedYears = unsupportedYears.filter(year => !supportedYears.includes(year));
