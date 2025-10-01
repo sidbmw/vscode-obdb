@@ -328,9 +328,13 @@ export function optimizeDebugFilter(existingFilter: any, supportedYears: string[
     return null;
   }
 
-  const supportedYearNumbers = supportedYears.map(y => parseInt(y, 10));
+  const supportedYearNumbers = supportedYears.map(y => parseInt(y, 10)).sort((a, b) => a - b);
   let needsOptimization = false;
   const optimized: any = {};
+
+  // Find the range of supported years
+  const minSupportedYear = Math.min(...supportedYearNumbers);
+  const maxSupportedYear = Math.max(...supportedYearNumbers);
 
   // Check 'to' property - if a supported year is <= to, we can reduce 'to'
   if (existingFilter.to !== undefined) {
@@ -370,7 +374,15 @@ export function optimizeDebugFilter(existingFilter: any, supportedYears: string[
     }
   }
 
-  // Check 'years' array - remove any years that are supported
+  // Find gaps (unsupported years) between min and max supported years
+  const gaps: number[] = [];
+  for (let year = minSupportedYear + 1; year < maxSupportedYear; year++) {
+    if (!supportedYearNumbers.includes(year)) {
+      gaps.push(year);
+    }
+  }
+
+  // Check 'years' array - remove any years that are supported, and add gaps if they exist
   if (existingFilter.years && Array.isArray(existingFilter.years)) {
     const filteredYears = existingFilter.years.filter((year: number) => !supportedYearNumbers.includes(year));
     if (filteredYears.length < existingFilter.years.length) {
@@ -381,6 +393,10 @@ export function optimizeDebugFilter(existingFilter: any, supportedYears: string[
     } else {
       optimized.years = existingFilter.years;
     }
+  } else if (gaps.length > 0) {
+    // Add gaps to the years array if they exist and weren't already there
+    optimized.years = gaps;
+    needsOptimization = true;
   }
 
   if (!needsOptimization) {

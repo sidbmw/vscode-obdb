@@ -121,9 +121,13 @@ function optimizeDebugFilter(existingFilter: any, supportedYears: string[]): any
     return null;
   }
 
-  const supportedYearNumbers = supportedYears.map(y => parseInt(y, 10));
+  const supportedYearNumbers = supportedYears.map(y => parseInt(y, 10)).sort((a, b) => a - b);
   let needsOptimization = false;
   const optimized: any = {};
+
+  // Find the range of supported years
+  const minSupportedYear = Math.min(...supportedYearNumbers);
+  const maxSupportedYear = Math.max(...supportedYearNumbers);
 
   // Check 'to' property - if a supported year is <= to, we can reduce 'to'
   if (existingFilter.to !== undefined) {
@@ -159,17 +163,33 @@ function optimizeDebugFilter(existingFilter: any, supportedYears: string[]): any
     }
   }
 
-  // Check 'years' array - remove any years that are supported
+  // Find gaps (unsupported years) between min and max supported years
+  const gaps: number[] = [];
+  for (let year = minSupportedYear + 1; year < maxSupportedYear; year++) {
+    if (!supportedYearNumbers.includes(year)) {
+      gaps.push(year);
+    }
+  }
+
+  // Check 'years' array - remove any years that are supported, and merge with gaps
   if (existingFilter.years && Array.isArray(existingFilter.years)) {
     const filteredYears = existingFilter.years.filter((year: number) => !supportedYearNumbers.includes(year));
-    if (filteredYears.length < existingFilter.years.length) {
+
+    // Merge filtered years with gaps and remove duplicates
+    const mergedYears = [...new Set([...filteredYears, ...gaps])].sort((a, b) => a - b);
+
+    if (filteredYears.length < existingFilter.years.length || mergedYears.length > filteredYears.length) {
       needsOptimization = true;
-      if (filteredYears.length > 0) {
-        optimized.years = filteredYears;
+      if (mergedYears.length > 0) {
+        optimized.years = mergedYears;
       }
     } else {
       optimized.years = existingFilter.years;
     }
+  } else if (gaps.length > 0) {
+    // Add gaps to the years array if they exist and weren't already there
+    optimized.years = gaps;
+    needsOptimization = true;
   }
 
   if (!needsOptimization) {
@@ -188,6 +208,8 @@ interface OptimizationEdit {
   path: (string | number)[];
   currentFilter: any;
   optimizedFilter: any | undefined;
+  commandIndex: number;
+  action: 'update' | 'remove' | 'add';
 }
 
 async function optimizeCommand(workspacePath: string, commit: boolean = false): Promise<void> {
@@ -235,6 +257,7 @@ async function optimizeCommand(workspacePath: string, commit: boolean = false): 
       const cmdNode = jsonc.findNodeAtLocation(commandNode, ['cmd']);
       const raxNode = jsonc.findNodeAtLocation(commandNode, ['rax']);
       const dbgfilterNode = jsonc.findNodeAtLocation(commandNode, ['dbgfilter']);
+      const dbgNode = jsonc.findNodeAtLocation(commandNode, ['dbg']);
 
       if (!hdrNode || !cmdNode) {
         console.log(`  ${index + 1}. [Missing hdr or cmd]`);
@@ -245,6 +268,7 @@ async function optimizeCommand(workspacePath: string, commit: boolean = false): 
       const cmd = jsonc.getNodeValue(cmdNode);
       const rax = raxNode ? jsonc.getNodeValue(raxNode) : undefined;
       const existingDbgFilter = dbgfilterNode ? jsonc.getNodeValue(dbgfilterNode) : null;
+      const hasDbgTrue = dbgNode && jsonc.getNodeValue(dbgNode) === true;
 
       const commandId = createSimpleCommandId(hdr, cmd, rax);
       const supportedYears = await getSupportedModelYears(workspacePath, commandId);
@@ -267,7 +291,9 @@ async function optimizeCommand(workspacePath: string, commit: boolean = false): 
             commandId,
             path: ['commands', index, 'dbgfilter'],
             currentFilter: existingDbgFilter,
-            optimizedFilter: undefined
+            optimizedFilter: undefined,
+            commandIndex: index,
+            action: 'remove'
           });
         } else if (optimizedFilter !== null) {
           console.log(`     ⚠️  Current dbgfilter: ${JSON.stringify(existingDbgFilter)}`);
@@ -276,13 +302,48 @@ async function optimizeCommand(workspacePath: string, commit: boolean = false): 
             commandId,
             path: ['commands', index, 'dbgfilter'],
             currentFilter: existingDbgFilter,
-            optimizedFilter
+            optimizedFilter,
+            commandIndex: index,
+            action: 'update'
           });
         } else if (existingDbgFilter) {
           console.log(`     ✅ Debug filter is already optimal: ${JSON.stringify(existingDbgFilter)}`);
         }
       } else if (existingDbgFilter) {
         console.log(`     Current dbgfilter: ${JSON.stringify(existingDbgFilter)}`);
+      } else if (hasDbgTrue && supportedYears.length > 0) {
+        // Command has dbg: true but no dbgfilter - suggest adding one
+        const supportedYearNumbers = supportedYears.map(y => parseInt(y)).sort((a, b) => a - b);
+        const minYear = Math.min(...supportedYearNumbers);
+        const maxYear = Math.max(...supportedYearNumbers);
+
+        // Find gaps between min and max
+        const gaps: number[] = [];
+        for (let year = minYear + 1; year < maxYear; year++) {
+          if (!supportedYearNumbers.includes(year)) {
+            gaps.push(year);
+          }
+        }
+
+        const suggestedFilter: any = {
+          to: minYear - 1,
+          from: maxYear + 1
+        };
+
+        if (gaps.length > 0) {
+          suggestedFilter.years = gaps;
+        }
+
+        console.log(`     ⚠️  Has "dbg": true but no dbgfilter`);
+        console.log(`     ✅ Recommendation: Remove "dbg": true and add dbgfilter: ${JSON.stringify(suggestedFilter)}`);
+        editsToApply.push({
+          commandId,
+          path: ['commands', index, 'dbgfilter'],
+          currentFilter: null,
+          optimizedFilter: suggestedFilter,
+          commandIndex: index,
+          action: 'add'
+        });
       }
 
       console.log('');
@@ -292,50 +353,108 @@ async function optimizeCommand(workspacePath: string, commit: boolean = false): 
     if (commit && editsToApply.length > 0) {
       console.log('\n🔧 Applying optimizations...\n');
 
-      // Process edits by using regex to find and replace dbgfilter values
-      for (const edit of editsToApply) {
-        const commandIndex = edit.path[1] as number;
+      // Process edits in reverse order to avoid offset issues
+      // (modifying later parts of the file won't affect earlier offsets)
+      const sortedEdits = [...editsToApply].sort((a, b) => b.commandIndex - a.commandIndex);
+
+      for (const edit of sortedEdits) {
+        const commandIndex = edit.commandIndex;
         const commandNode = commandsNode.children![commandIndex];
-        const dbgfilterNode = jsonc.findNodeAtLocation(commandNode, ['dbgfilter']);
 
-        if (!dbgfilterNode) continue;
+        if (edit.action === 'add') {
+          // Add dbgfilter and remove "dbg": true using simple string manipulation
+          // Ensure property order: to, years, from
+          const filter = edit.optimizedFilter!;
+          const orderedFilter: any = {};
+          if (filter.to !== undefined) orderedFilter.to = filter.to;
+          if (filter.years !== undefined) orderedFilter.years = filter.years;
+          if (filter.from !== undefined) orderedFilter.from = filter.from;
 
-        // Find the dbgfilter property in the content using the node offset
-        const nodeStart = dbgfilterNode.parent!.offset;
-        const nodeEnd = dbgfilterNode.parent!.offset + dbgfilterNode.parent!.length;
+          const filterJson = JSON.stringify(orderedFilter)
+            .replace(/^{/, '{ ')
+            .replace(/}$/, ' }')
+            .replace(/":/g, '": ')
+            .replace(/,"/g, ', "')
+            .replace(/,(\d)/g, ', $1')  // Add space after comma in arrays
+            .replace(/\[(\d)/g, '[$1')  // Remove space after opening bracket
+            .replace(/(\d)\]/g, '$1]'); // Remove space before closing bracket
 
-        // Extract the property text
-        const propertyText = content.substring(nodeStart, nodeEnd);
+          // Find the command line in the content
+          const hdrNode = jsonc.findNodeAtLocation(commandNode, ['hdr']);
+          if (!hdrNode) continue;
 
-        // Match the dbgfilter pattern: "dbgfilter": <any json object>
-        const dbgfilterMatch = propertyText.match(/"dbgfilter"\s*:\s*(\{[^}]*\})/);
+          const commandStart = commandNode.offset;
+          const commandEnd = commandNode.offset + commandNode.length;
+          let commandText = content.substring(commandStart, commandEnd);
 
-        if (!dbgfilterMatch) continue;
+          // Remove "dbg": true, if present
+          commandText = commandText.replace(/"dbg"\s*:\s*true\s*,\s*/g, '');
 
-        const oldValue = dbgfilterMatch[1];
-
-        if (edit.optimizedFilter === undefined) {
-          // Remove the entire dbgfilter property (including comma and whitespace)
-          const regex = new RegExp(`\\s*,?\\s*"dbgfilter"\\s*:\\s*${oldValue.replace(/[{}]/g, '\\$&')}\\s*,?\\s*`, 'g');
-          const before = content;
-          content = content.replace(regex, ' ');
-          if (before === content) {
-            // Try alternative pattern
-            const altRegex = new RegExp(`\\s*"dbgfilter"\\s*:\\s*${oldValue.replace(/[{}]/g, '\\$&')}\\s*,`, 'g');
-            content = content.replace(altRegex, '');
+          // Find the first line of the command (everything before "signals")
+          const lines = commandText.split('\n');
+          if (lines.length > 0) {
+            const firstLine = lines[0];
+            // Insert dbgfilter at the end of the first line
+            // The line should end with a comma, so add the dbgfilter right before the final comma
+            if (firstLine.trim().endsWith(',')) {
+              // Replace the trailing comma with dbgfilter + comma
+              lines[0] = firstLine.replace(/,\s*$/, `, "dbgfilter": ${filterJson},`);
+              commandText = lines.join('\n');
+            }
           }
-          console.log(`  ✅ Removed dbgfilter for ${edit.commandId}`);
+
+          content = content.substring(0, commandStart) + commandText + content.substring(commandEnd);
+          console.log(`  ✅ Added dbgfilter and removed "dbg": true for ${edit.commandId}`);
         } else {
-          // Replace with optimized filter on one line with proper spacing
-          // Format: { "to": 2018, "from": 2022 }
-          const filterJson = JSON.stringify(edit.optimizedFilter)
-            .replace(/^{/, '{ ')      // Add space after opening brace
-            .replace(/}$/, ' }')      // Add space before closing brace
-            .replace(/":/g, '": ')    // Add space after colon
-            .replace(/,"/g, ', "');   // Add space after comma
-          const regex = new RegExp(`"dbgfilter"\\s*:\\s*${oldValue.replace(/[{}]/g, '\\$&')}`, 'g');
-          content = content.replace(regex, `"dbgfilter": ${filterJson}`);
-          console.log(`  ✅ Optimized dbgfilter for ${edit.commandId}`);
+          const dbgfilterNode = jsonc.findNodeAtLocation(commandNode, ['dbgfilter']);
+          if (!dbgfilterNode) continue;
+
+          // Find the dbgfilter property in the content using the node offset
+          const nodeStart = dbgfilterNode.parent!.offset;
+          const nodeEnd = dbgfilterNode.parent!.offset + dbgfilterNode.parent!.length;
+
+          // Extract the property text
+          const propertyText = content.substring(nodeStart, nodeEnd);
+
+          // Match the dbgfilter pattern: "dbgfilter": <any json object>
+          const dbgfilterMatch = propertyText.match(/"dbgfilter"\s*:\s*(\{[^}]*\})/);
+
+          if (!dbgfilterMatch) continue;
+
+          const oldValue = dbgfilterMatch[1];
+
+          if (edit.action === 'remove') {
+            // Remove the entire dbgfilter property (including comma and whitespace)
+            const regex = new RegExp(`\\s*,?\\s*"dbgfilter"\\s*:\\s*${oldValue.replace(/[{}]/g, '\\$&')}\\s*,?\\s*`, 'g');
+            const before = content;
+            content = content.replace(regex, ' ');
+            if (before === content) {
+              // Try alternative pattern
+              const altRegex = new RegExp(`\\s*"dbgfilter"\\s*:\\s*${oldValue.replace(/[{}]/g, '\\$&')}\\s*,`, 'g');
+              content = content.replace(altRegex, '');
+            }
+            console.log(`  ✅ Removed dbgfilter for ${edit.commandId}`);
+          } else if (edit.action === 'update') {
+            // Replace with optimized filter on one line with proper spacing
+            // Ensure property order: to, years, from
+            const filter = edit.optimizedFilter;
+            const orderedFilter: any = {};
+            if (filter.to !== undefined) orderedFilter.to = filter.to;
+            if (filter.years !== undefined) orderedFilter.years = filter.years;
+            if (filter.from !== undefined) orderedFilter.from = filter.from;
+
+            const filterJson = JSON.stringify(orderedFilter)
+              .replace(/^{/, '{ ')
+              .replace(/}$/, ' }')
+              .replace(/":/g, '": ')
+              .replace(/,"/g, ', "')
+              .replace(/,(\d)/g, ', $1')  // Add space after comma in arrays
+              .replace(/\[(\d)/g, '[$1')  // Remove space after opening bracket
+              .replace(/(\d)\]/g, '$1]'); // Remove space before closing bracket
+            const regex = new RegExp(`"dbgfilter"\\s*:\\s*${oldValue.replace(/[{}]/g, '\\$&')}`, 'g');
+            content = content.replace(regex, `"dbgfilter": ${filterJson}`);
+            console.log(`  ✅ Optimized dbgfilter for ${edit.commandId}`);
+          }
         }
       }
 
