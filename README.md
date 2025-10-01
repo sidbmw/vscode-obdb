@@ -56,6 +56,48 @@ npm run compile
 npm run watch
 ```
 
+### CLI Tool
+
+The project includes a command-line tool for working with signalsets outside of VS Code.
+
+#### Building the CLI
+
+```bash
+# Compile the CLI
+npm run compile:cli
+```
+
+Or use the VSCode task:
+1. Press `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Windows/Linux)
+2. Type "Tasks: Run Task"
+3. Select "compile-cli"
+
+#### Running the CLI
+
+After building, you can run the CLI in several ways:
+
+**Using node directly:**
+```bash
+node dist/cli.js optimize <workspace-path>
+```
+
+**Using npm link (for development):**
+```bash
+# Link the CLI globally
+npm link
+
+# Now you can use it anywhere
+obdb optimize <workspace-path>
+```
+
+**Example:**
+```bash
+# Parse and display the root node of the signalset
+obdb optimize /path/to/your/workspace
+```
+
+The CLI will look for a signalset at `<workspace-path>/signalsets/v3/default.json` and print the parsed root node to the console.
+
 ### Build & Package
 
 ```bash

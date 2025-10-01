@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as jsonc from 'jsonc-parser';
-import { getSupportedModelYearsForCommand, getUnsupportedModelYearsForCommand, generateDebugFilterSuggestion } from '../utils/commandSupportUtils';
+import { getSupportedModelYearsForCommand, getUnsupportedModelYearsForCommand, generateDebugFilterSuggestion, createSimpleCommandId, optimizeDebugFilter } from '../utils/commandSupportUtils';
 import { groupModelYearsByGeneration, formatYearsAsRanges, getGenerationForModelYear } from '../utils/generations';
 
 export class CommandCodeLensProvider implements vscode.CodeLensProvider {
@@ -32,84 +32,6 @@ export class CommandCodeLensProvider implements vscode.CodeLensProvider {
 
     // Use the generation utility to find the generation for this year
     return await getGenerationForModelYear(firstYear);
-  }
-
-  /**
-   * Optimize an existing debug filter by removing years that are actually supported
-   * @param existingFilter The current debug filter
-   * @param supportedYears Years that are known to be supported
-   * @returns Optimized filter, null if no optimization needed, undefined if filter should be removed entirely
-   */
-  private optimizeDebugFilter(existingFilter: any, supportedYears: string[]): any | null | undefined {
-    if (!existingFilter) {
-      return null;
-    }
-
-    const supportedYearNumbers = supportedYears.map(y => parseInt(y, 10));
-    let needsOptimization = false;
-    const optimized: any = {};
-
-    // Check 'to' property - if a supported year is <= to, we can reduce 'to'
-    if (existingFilter.to !== undefined) {
-      const supportedYearsAtOrBelowTo = supportedYearNumbers.filter(year => year <= existingFilter.to);
-      if (supportedYearsAtOrBelowTo.length > 0) {
-        const maxSupportedAtOrBelowTo = Math.max(...supportedYearsAtOrBelowTo);
-        // Always reduce 'to' to exclude supported years, don't remove it entirely
-        const newTo = maxSupportedAtOrBelowTo - 1;
-        if (newTo >= 0) { // Only set if it results in a valid year
-          optimized.to = newTo;
-          needsOptimization = true;
-        } else {
-          // If reducing would result in negative year, remove 'to' entirely
-          needsOptimization = true;
-        }
-      } else {
-        optimized.to = existingFilter.to;
-      }
-    }
-
-    // Check 'from' property - if a supported year is >= from, we can increase 'from'
-    if (existingFilter.from !== undefined) {
-      const supportedYearsAtOrAboveFrom = supportedYearNumbers.filter(year => year >= existingFilter.from);
-      if (supportedYearsAtOrAboveFrom.length > 0) {
-        const minSupportedAtOrAboveFrom = Math.min(...supportedYearsAtOrAboveFrom);
-        // Always increase 'from' to exclude supported years, don't remove it entirely
-        const newFrom = minSupportedAtOrAboveFrom + 1;
-        if (newFrom <= 3000) { // Only set if it results in a reasonable year
-          optimized.from = newFrom;
-          needsOptimization = true;
-        } else {
-          // If increasing would result in unreasonable year, remove 'from' entirely
-          needsOptimization = true;
-        }
-      } else {
-        optimized.from = existingFilter.from;
-      }
-    }
-
-    // Check 'years' array - remove any years that are supported
-    if (existingFilter.years && Array.isArray(existingFilter.years)) {
-      const filteredYears = existingFilter.years.filter((year: number) => !supportedYearNumbers.includes(year));
-      if (filteredYears.length < existingFilter.years.length) {
-        needsOptimization = true;
-        if (filteredYears.length > 0) {
-          optimized.years = filteredYears;
-        }
-      } else {
-        optimized.years = existingFilter.years;
-      }
-    }
-
-    if (!needsOptimization) {
-      return null; // No optimization needed
-    }
-
-    // If the optimized filter is empty, suggest removing the filter entirely
-    if (Object.keys(optimized).length === 0) {
-      return undefined; // Signal to remove the filter
-    }
-
-    return optimized;
   }
 
   /**
@@ -191,25 +113,19 @@ export class CommandCodeLensProvider implements vscode.CodeLensProvider {
             }
 
             if (hdr && cmdProperty) {
-              let commandId = '';
-              let cmdValueString = '';
+              let cmdValue: string | Record<string, string> | undefined;
 
               if (cmdProperty.type === 'object' && cmdProperty.children && cmdProperty.children[0] && cmdProperty.children[0].children) {
                 const firstCmdProp = cmdProperty.children[0];
                 const cmdKeyNode = firstCmdProp.children![0];
                 const cmdValueNode = firstCmdProp.children![1];
-                cmdValueString = `${cmdKeyNode.value}${cmdValueNode.value}`;
-                commandId = `${hdr}.${cmdValueString}`;
+                cmdValue = { [cmdKeyNode.value as string]: cmdValueNode.value as string };
               } else if (cmdProperty.type === 'string') {
-                cmdValueString = cmdProperty.value as string;
-                commandId = `${hdr}.${cmdValueString}`;
+                cmdValue = cmdProperty.value as string;
               }
 
-              if (rax && commandId) {
-                commandId = `${hdr}.${rax}.${commandId.split('.')[1]}`;
-              }
-
-              if (commandId) {
+              if (cmdValue) {
+                const commandId = createSimpleCommandId(hdr, cmdValue, rax);
                 const range = new vscode.Range(
                   document.positionAt(commandNode.offset),
                   document.positionAt(commandNode.offset + commandNode.length)
@@ -287,7 +203,7 @@ export class CommandCodeLensProvider implements vscode.CodeLensProvider {
 
                 // Check existing debug filter for optimization opportunities
                 if (existingDbgFilter && supportedYears.length > 0) {
-                  const optimizedFilter = this.optimizeDebugFilter(existingDbgFilter, supportedYears);
+                  const optimizedFilter = optimizeDebugFilter(existingDbgFilter, supportedYears);
                   if (optimizedFilter !== null) {
                     const optimizeRange = new vscode.Range(
                       document.positionAt(commandNode.offset),

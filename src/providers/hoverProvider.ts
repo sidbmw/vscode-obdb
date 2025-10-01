@@ -8,7 +8,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { groupModelYearsByGeneration } from '../utils/generations';
 import { numberToExcelColumn, bixToByte } from '../utils/bixConverter';
-import { getSupportedModelYearsForCommand, getUnsupportedModelYearsForCommand, stripReceiveFilter } from '../utils/commandSupportUtils';
+import { getSupportedModelYearsForCommand, getUnsupportedModelYearsForCommand, stripReceiveFilter, createSimpleCommandId } from '../utils/commandSupportUtils';
 
 /**
  * Creates a hover provider for JSON files
@@ -163,22 +163,8 @@ export function createHoverProvider(): vscode.Disposable {
             const rax = positionResult.commandObject.rax;
 
             // Try to extract a command ID
-            if (hdr) {
-              if (typeof cmd === 'object') {
-                // Format: 7E0.221100 for cmd format {"22": "1100"}
-                const cmdKey = Object.keys(cmd)[0];
-                const cmdValue = cmd[cmdKey];
-                commandId = `${hdr}.${cmdKey}${cmdValue}`;
-              } else if (typeof cmd === 'string') {
-                // Format: 7E0.221100 for cmd format "221100"
-                commandId = `${hdr}.${cmd}`;
-              }
-
-              // Include RAX in the format if present
-              if (rax && commandId) {
-                // Update to format: 7E0.7E8.221100
-                commandId = `${hdr}.${rax}.${commandId.split('.')[1]}`;
-              }
+            if (hdr && cmd) {
+              commandId = createSimpleCommandId(hdr, cmd, rax);
             }
           }
 

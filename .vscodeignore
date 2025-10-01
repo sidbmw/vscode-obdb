@@ -7,6 +7,9 @@ src/**
 .yarnrc
 webpack.config.js
 tsconfig.json
+tsconfig.cli.json
+dist/cli.js
+dist/cli.js.map
 **/.eslintrc.json
 **/*.map
 **/*.ts

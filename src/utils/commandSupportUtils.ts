@@ -24,6 +24,36 @@ function loadCommandSupportYaml(content: string): any {
 }
 
 /**
+ * Creates a simple command ID from header, command, and optional receive address
+ * @param hdr The header value (e.g. "7E0")
+ * @param cmd The command value - can be string or object with single key-value pair
+ * @param rax Optional receive address (e.g. "7E8")
+ * @returns The command ID string (e.g. "7E0.221100" or "7E0.7E8.221100")
+ */
+export function createSimpleCommandId(hdr: string, cmd: string | Record<string, string>, rax?: string): string {
+  let cmdValueString = '';
+
+  if (typeof cmd === 'object') {
+    // Format: {"22": "1100"} -> "221100"
+    const cmdKey = Object.keys(cmd)[0];
+    const cmdValue = cmd[cmdKey];
+    cmdValueString = `${cmdKey}${cmdValue}`;
+  } else if (typeof cmd === 'string') {
+    // Already a string like "221100"
+    cmdValueString = cmd;
+  }
+
+  let commandId = `${hdr}.${cmdValueString}`;
+
+  // Include RAX in the format if present
+  if (rax) {
+    commandId = `${hdr}.${rax}.${cmdValueString}`;
+  }
+
+  return commandId;
+}
+
+/**
  * Strips the receive filter (middle part) from a command ID if present
  * @param commandId The command ID in format "header.response.command" or "header.command"
  * @returns Simplified command ID in format "header.command"
@@ -285,4 +315,82 @@ export async function generateDebugFilterSuggestion(
   }
 
   return filter;
+}
+
+/**
+ * Optimize an existing debug filter by removing years that are actually supported
+ * @param existingFilter The current debug filter
+ * @param supportedYears Years that are known to be supported
+ * @returns Optimized filter, null if no optimization needed, undefined if filter should be removed entirely
+ */
+export function optimizeDebugFilter(existingFilter: any, supportedYears: string[]): any | null | undefined {
+  if (!existingFilter) {
+    return null;
+  }
+
+  const supportedYearNumbers = supportedYears.map(y => parseInt(y, 10));
+  let needsOptimization = false;
+  const optimized: any = {};
+
+  // Check 'to' property - if a supported year is <= to, we can reduce 'to'
+  if (existingFilter.to !== undefined) {
+    const supportedYearsAtOrBelowTo = supportedYearNumbers.filter(year => year <= existingFilter.to);
+    if (supportedYearsAtOrBelowTo.length > 0) {
+      const maxSupportedAtOrBelowTo = Math.max(...supportedYearsAtOrBelowTo);
+      // Always reduce 'to' to exclude supported years, don't remove it entirely
+      const newTo = maxSupportedAtOrBelowTo - 1;
+      if (newTo >= 0) { // Only set if it results in a valid year
+        optimized.to = newTo;
+        needsOptimization = true;
+      } else {
+        // If reducing would result in negative year, remove 'to' entirely
+        needsOptimization = true;
+      }
+    } else {
+      optimized.to = existingFilter.to;
+    }
+  }
+
+  // Check 'from' property - if a supported year is >= from, we can increase 'from'
+  if (existingFilter.from !== undefined) {
+    const supportedYearsAtOrAboveFrom = supportedYearNumbers.filter(year => year >= existingFilter.from);
+    if (supportedYearsAtOrAboveFrom.length > 0) {
+      const minSupportedAtOrAboveFrom = Math.min(...supportedYearsAtOrAboveFrom);
+      // Always increase 'from' to exclude supported years, don't remove it entirely
+      const newFrom = minSupportedAtOrAboveFrom + 1;
+      if (newFrom <= 3000) { // Only set if it results in a reasonable year
+        optimized.from = newFrom;
+        needsOptimization = true;
+      } else {
+        // If increasing would result in unreasonable year, remove 'from' entirely
+        needsOptimization = true;
+      }
+    } else {
+      optimized.from = existingFilter.from;
+    }
+  }
+
+  // Check 'years' array - remove any years that are supported
+  if (existingFilter.years && Array.isArray(existingFilter.years)) {
+    const filteredYears = existingFilter.years.filter((year: number) => !supportedYearNumbers.includes(year));
+    if (filteredYears.length < existingFilter.years.length) {
+      needsOptimization = true;
+      if (filteredYears.length > 0) {
+        optimized.years = filteredYears;
+      }
+    } else {
+      optimized.years = existingFilter.years;
+    }
+  }
+
+  if (!needsOptimization) {
+    return null; // No optimization needed
+  }
+
+  // If the optimized filter is empty, suggest removing the filter entirely
+  if (Object.keys(optimized).length === 0) {
+    return undefined; // Signal to remove the filter
+  }
+
+  return optimized;
 }
