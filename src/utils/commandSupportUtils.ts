@@ -69,13 +69,13 @@ export function stripReceiveFilter(commandId: string): string {
 }
 
 /**
- * Normalizes a command ID by removing any signal information after `:`
+ * Normalizes a command ID by removing any signal information after `:` and `|`.
  * @param commandId The command ID to normalize (e.g. 'DA0E.222612:TLX_GEAR_V2')
  * @returns Normalized command ID without signal information or additional properties
  */
 export function normalizeCommandId(commandId: string): string {
   // Remove everything after ':' (signal info)
-  return commandId.split(/[:]/)[0];
+  return commandId.split(/[:\\|]/)[0];
 }
 
 /**
@@ -158,9 +158,15 @@ export async function getSupportedModelYearsForCommand(commandId: string, worksp
   const testCasesPath = path.join(workspaceRoot, 'tests', 'test_cases');
   const supportedYears: string[] = [];
 
+  // Extract the header prefix (part before first dot) and suffix (part after last dot) from command ID
+  const commandParts = commandId.split('.');
+  const commandHeader = commandParts[0]; // e.g., "747"
+  const commandSuffix = commandParts[commandParts.length - 1]; // e.g., "220103"
+
   try {
     const years = await fs.promises.readdir(testCasesPath);
     for (const year of years) {
+      console.log(`Checking year: ${year}`);
       const yearPath = path.join(testCasesPath, year);
       try {
         const yearStat = await fs.promises.stat(yearPath);
@@ -175,7 +181,15 @@ export async function getSupportedModelYearsForCommand(commandId: string, worksp
           if (commandsDirStat.isDirectory()) {
             const commandFiles = await fs.promises.readdir(commandsDir);
             for (const file of commandFiles) {
-              if (file.includes(cmdPart) || file.includes(commandId)) {
+              // Parse the filename to extract header and suffix
+              const fileNameWithoutExt = normalizeCommandId(file.replace(/\.(yaml|yml)$/, ''));
+              console.log(`File without ext: ${fileNameWithoutExt}`);
+              const fileParts = fileNameWithoutExt.split('.');
+              const fileHeader = fileParts[0]; // e.g., "701" from "701.709.220103"
+              const fileSuffix = fileParts[fileParts.length - 1]; // e.g., "220103" from "701.709.220103"
+
+              // Match only if both header and suffix match
+              if (fileHeader === commandHeader && fileSuffix === commandSuffix) {
                 supportedYears.push(year);
                 foundInYear = true;
                 break;
@@ -185,6 +199,7 @@ export async function getSupportedModelYearsForCommand(commandId: string, worksp
         } catch (err) {
           // It's ok if there's no commands directory
         }
+        console.log(`Found in commands dir: ${foundInYear}`);
 
         if (!foundInYear) {
           const supportFilePath = path.join(yearPath, 'command_support.yaml');
@@ -199,7 +214,17 @@ export async function getSupportedModelYearsForCommand(commandId: string, worksp
                   const normalizedCmd = normalizeCommandId(cmd);
                   const ecu = Object.keys(yamlContent.supported_commands_by_ecu).find(key => yamlContent.supported_commands_by_ecu[key] === ecuCommands);
 
-                  if (normalizedCmd === cmdPart || (ecu && `${ecu}.${normalizedCmd}` === commandId) || normalizedCmd.includes(cmdPart)) {
+                  // Parse the normalized command to extract header and suffix
+                  const normalizedParts = normalizedCmd.split('.');
+                  const normalizedHeader = normalizedParts[0];
+                  const normalizedSuffix = normalizedParts[normalizedParts.length - 1];
+
+                  // Check for exact match with proper header and suffix comparison
+                  const headerMatches = normalizedHeader === commandHeader;
+                  const suffixMatches = normalizedSuffix === commandSuffix;
+                  const fullMatch = (ecu && `${ecu}.${normalizedCmd}` === commandId) || normalizedCmd === commandId;
+
+                  if ((headerMatches && suffixMatches) || fullMatch) {
                     supportedYears.push(year);
                     foundInYear = true;
                     break;

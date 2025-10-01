@@ -16,7 +16,11 @@ interface CliOptions {
   commit?: boolean;
 }
 
-function parseArgs(): CliOptions {
+interface CommandSupportOptions extends CliOptions {
+  commandId?: string;
+}
+
+function parseArgs(): CommandSupportOptions {
   const args = process.argv.slice(2);
 
   if (args.length === 0) {
@@ -26,6 +30,7 @@ function parseArgs(): CliOptions {
 
   const command = args[0];
   let workspacePath: string | undefined;
+  let commandId: string | undefined;
   let commit = false;
 
   // Parse remaining arguments
@@ -34,20 +39,23 @@ function parseArgs(): CliOptions {
       commit = true;
     } else if (!workspacePath) {
       workspacePath = args[i];
+    } else if (!commandId && command === 'command-support') {
+      commandId = args[i];
     }
   }
 
-  return { command, workspacePath, commit };
+  return { command, workspacePath, commandId, commit };
 }
 
 function printUsage(): void {
   console.log('Usage: obdb <command> <workspace-path> [options]');
   console.log('');
   console.log('Commands:');
-  console.log('  optimize <workspace-path>  Parse and optimize signalset');
+  console.log('  optimize <workspace-path>         Parse and optimize signalset');
+  console.log('  command-support <workspace-path> <command-id>  Show supported and unsupported model years for a command');
   console.log('');
   console.log('Options:');
-  console.log('  --commit                   Apply the optimizations to the file');
+  console.log('  --commit                          Apply the optimizations to the file');
 }
 
 
@@ -294,6 +302,70 @@ async function optimizeCommand(workspacePath: string, commit: boolean = false): 
   }
 }
 
+async function commandSupportCommand(workspacePath: string, commandId: string): Promise<void> {
+  if (!fs.existsSync(workspacePath)) {
+    console.error(`Error: Workspace path does not exist: ${workspacePath}`);
+    process.exit(1);
+  }
+
+  if (!commandId) {
+    console.error('Error: Command ID is required for command-support');
+    printUsage();
+    process.exit(1);
+  }
+
+  console.log(`Analyzing command support for: ${commandId}`);
+  console.log(`Workspace: ${workspacePath}`);
+  console.log('');
+
+  try {
+    // Get supported and unsupported model years
+    const [supportedYears, unsupportedYears] = await Promise.all([
+      getSupportedModelYearsForCommand(commandId, workspacePath),
+      getUnsupportedModelYearsForCommand(commandId, workspacePath)
+    ]);
+
+    // Sort years numerically
+    const sortedSupportedYears = supportedYears.sort((a, b) => parseInt(a) - parseInt(b));
+    const sortedUnsupportedYears = unsupportedYears.sort((a, b) => parseInt(a) - parseInt(b));
+
+    // Display results
+    console.log('📊 Command Support Analysis:');
+    console.log('');
+
+    if (sortedSupportedYears.length > 0) {
+      console.log(`✅ Supported model years (${sortedSupportedYears.length}):`);
+      console.log(`   ${sortedSupportedYears.join(', ')}`);
+    } else {
+      console.log('✅ Supported model years: None found');
+    }
+
+    console.log('');
+
+    if (sortedUnsupportedYears.length > 0) {
+      console.log(`❌ Unsupported model years (${sortedUnsupportedYears.length}):`);
+      console.log(`   ${sortedUnsupportedYears.join(', ')}`);
+    } else {
+      console.log('❌ Unsupported model years: None found');
+    }
+
+    console.log('');
+
+    // Summary
+    const totalYears = sortedSupportedYears.length + sortedUnsupportedYears.length;
+    if (totalYears > 0) {
+      const supportPercentage = Math.round((sortedSupportedYears.length / totalYears) * 100);
+      console.log(`📈 Summary: ${sortedSupportedYears.length}/${totalYears} model years supported (${supportPercentage}%)`);
+    } else {
+      console.log('📈 Summary: No support data found for this command');
+    }
+
+  } catch (error) {
+    console.error('Error analyzing command support:', error);
+    process.exit(1);
+  }
+}
+
 async function main(): Promise<void> {
   const options = parseArgs();
 
@@ -305,6 +377,19 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       await optimizeCommand(options.workspacePath, options.commit || false);
+      break;
+    case 'command-support':
+      if (!options.workspacePath) {
+        console.error('Error: workspace-path is required for command-support');
+        printUsage();
+        process.exit(1);
+      }
+      if (!options.commandId) {
+        console.error('Error: command-id is required for command-support');
+        printUsage();
+        process.exit(1);
+      }
+      await commandSupportCommand(options.workspacePath, options.commandId);
       break;
     default:
       console.error(`Error: Unknown command '${options.command}'`);
